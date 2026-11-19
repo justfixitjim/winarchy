@@ -27,7 +27,11 @@ param(
     # Let a lone Super key tap open the Start menu as usual.
     [switch]$KeepStartMenu,
     # Don't install or upgrade apps with winget.
-    [switch]$SkipApps
+    [switch]$SkipApps,
+    # Show the bar's temperature in Celsius instead of Fahrenheit.
+    [switch]$Celsius,
+    # Don't install Superwhisper (dictation on Right Alt, like Omarchy).
+    [switch]$NoDictation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,6 +86,9 @@ if (-not $SkipApps) {
         @{ Id = 'Microsoft.PowerToys';       Name = 'PowerToys';        Present = { [bool](Get-AppxPackage -Name 'Microsoft.CommandPalette' -ErrorAction SilentlyContinue) } },
         @{ Id = 'Microsoft.WindowsTerminal'; Name = 'Windows Terminal'; Present = { Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe" } }
     )
+    if (-not $NoDictation) {
+        $apps += @{ Id = 'SuperUltra.superwhisper'; Name = 'Superwhisper'; Present = { Test-Path "$env:LOCALAPPDATA\superwhisper\Superwhisper.exe" } }
+    }
     foreach ($app in $apps) {
         if (& $app.Present) { Note "$($app.Name): already installed"; continue }
         Note "$($app.Name): installing (approve the UAC prompt if one appears)"
@@ -172,7 +179,35 @@ $template = [IO.File]::ReadAllText("$here\config\glazewm.yaml")
 $config = $template.Replace('{{WORKSPACES}}', ($lines -join "`n"))
 Install-File "$here\config\glazewm.yaml" (Join-Path $configDir 'config.yaml') $config
 
-# --- 6. Start at sign-in, then start now ----------------------------------------------
+# --- 6. Zebar bar ------------------------------------------------------------------------
+Step 'Installing the winarchy top bar (Zebar)'
+$zebarDir = Join-Path $glzr 'zebar'
+$pack = Join-Path $zebarDir 'winarchy'
+New-Item -ItemType Directory -Force -Path $pack | Out-Null
+Copy-Item "$here\config\zebar\*" $pack -Force
+$unit = 'F'; if ($Celsius) { $unit = 'C' }
+$barHtml = Join-Path $pack 'bar.html'
+Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';"))
+Note "temperature in degrees $unit"
+$zebarSettings = Join-Path $zebarDir 'settings.json'
+$wantStartup = '[{"pack":"winarchy","widget":"bar","preset":"default"}]'
+if (Test-Path $zebarSettings) {
+    $zs = Get-Content $zebarSettings -Raw | ConvertFrom-Json
+    if ((ConvertTo-Json -InputObject @($zs.startupConfigs) -Compress) -ne $wantStartup) {
+        Copy-Item $zebarSettings "$zebarSettings.bak-$stamp"
+        Note "backed up $zebarSettings -> settings.json.bak-$stamp"
+    }
+    $zs | Add-Member -NotePropertyName startupConfigs -Force `
+        -NotePropertyValue @([pscustomobject]@{ pack = 'winarchy'; widget = 'bar'; preset = 'default' })
+} else {
+    $zs = [pscustomobject]@{
+        '$schema' = 'https://github.com/glzr-io/zebar/raw/v3.3.1/resources/settings-schema.json'
+        startupConfigs = @([pscustomobject]@{ pack = 'winarchy'; widget = 'bar'; preset = 'default' })
+    }
+}
+Write-Utf8 $zebarSettings (($zs | ConvertTo-Json -Depth 5) + "`n")
+
+# --- 7. Start at sign-in, then start now ----------------------------------------------
 Step 'Starting GlazeWM (and at every sign-in)'
 $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
 $shell = New-Object -ComObject WScript.Shell
@@ -192,3 +227,8 @@ Write-Host '  Super+Alt+Space  menu: search and arrow to anything'
 Write-Host '  Super+K          every keybinding'
 Write-Host '  Super+Shift+P    pause tiling if you need to get out of the way'
 Write-Host "  Customise: $configDir\config.yaml and $dest\menu.json"
+if (-not $NoDictation -and (Test-Path "$env:LOCALAPPDATA\superwhisper\Superwhisper.exe")) {
+    Write-Host ''
+    Write-Host 'Dictation (Superwhisper): open it once from Super+Space, finish its setup and pick a'
+    Write-Host 'local model, then in its settings set Push to talk to Right Alt and enable Launch at login.'
+}

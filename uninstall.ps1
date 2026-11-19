@@ -54,6 +54,24 @@ if (Test-Path $config) {
     }
 }
 
+Step 'Restoring the Zebar bar'
+$zebarDir = Join-Path $env:USERPROFILE '.glzr\zebar'
+$zebarSettings = Join-Path $zebarDir 'settings.json'
+if (Test-Path $zebarSettings) {
+    $zbackup = Get-ChildItem "$zebarSettings.bak-*" -ErrorAction SilentlyContinue | Sort-Object Name |
+        Where-Object { (Get-Content $_.FullName -Raw) -notmatch '"winarchy"' } | Select-Object -First 1
+    if ($zbackup) { Copy-Item $zbackup.FullName $zebarSettings -Force; Write-Host "    restored $($zbackup.Name)" }
+    else {
+        $zs = Get-Content $zebarSettings -Raw | ConvertFrom-Json
+        $zs | Add-Member -NotePropertyName startupConfigs -Force `
+            -NotePropertyValue @([pscustomobject]@{ pack = 'glzr-io.starter'; widget = 'with-glazewm'; preset = 'default' })
+        [IO.File]::WriteAllText($zebarSettings, ($zs | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
+        Write-Host '    switched Zebar back to its starter bar'
+    }
+}
+$pack = Join-Path $zebarDir 'winarchy'
+if (Test-Path $pack) { Remove-Item $pack -Recurse -Force }
+
 Step "Removing $dest"
 if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
 $cache = Join-Path $env:LOCALAPPDATA 'winarchy'

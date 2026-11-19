@@ -3,28 +3,61 @@
   "root": {
     "label": "Go",
     "items": [
-      { "label": "Apps", "hint": "Super+Space", "run": "x-cmdpal:" },
+      {
+        "label": "Apps",
+        "hint": "Super+Space",
+        "run": "x-cmdpal:"
+      },
       {
         "label": "Learn",
         "items": [
-          { "label": "Keybindings", "hint": "Super+K", "page": "keys" },
-          { "label": "winarchy on GitHub", "run": "https://github.com/justfixitjim/winarchy#readme" },
-          { "label": "GlazeWM docs", "run": "https://github.com/glzr-io/glazewm#readme" },
-          { "label": "Command Palette docs", "run": "https://learn.microsoft.com/windows/powertoys/command-palette/overview" },
-          { "label": "Omarchy manual", "run": "https://learn.omacom.io/2/the-omarchy-manual" }
+          {
+            "label": "Keybindings",
+            "hint": "Super+K",
+            "page": "keys"
+          },
+          {
+            "label": "winarchy on GitHub",
+            "run": "https://github.com/justfixitjim/winarchy#readme"
+          },
+          {
+            "label": "GlazeWM docs",
+            "run": "https://github.com/glzr-io/glazewm#readme"
+          },
+          {
+            "label": "Command Palette docs",
+            "run": "https://learn.microsoft.com/windows/powertoys/command-palette/overview"
+          },
+          {
+            "label": "Omarchy manual",
+            "run": "https://learn.omacom.io/2/the-omarchy-manual"
+          }
         ]
       },
       {
         "label": "Capture",
         "items": [
-          { "label": "Screenshot region", "hint": "Super+Shift+S", "run": "ms-screenclip:" },
-          { "label": "Screen recording", "hint": "Snipping Tool", "run": "explorer.exe", "args": "shell:AppsFolder\\Microsoft.ScreenSketch_8wekyb3d8bbwe!App" }
+          {
+            "label": "Screenshot region",
+            "hint": "Super+Shift+S",
+            "run": "ms-screenclip:"
+          },
+          {
+            "label": "Screen recording",
+            "hint": "Snipping Tool",
+            "run": "explorer.exe",
+            "args": "shell:AppsFolder\\Microsoft.ScreenSketch_8wekyb3d8bbwe!App"
+          }
         ]
       },
       {
         "label": "Toggle",
         "items": [
-          { "label": "Pause tiling", "hint": "Super+Shift+P", "glaze": "wm-toggle-pause" },
+          {
+            "label": "Pause tiling",
+            "hint": "Super+Shift+P",
+            "glaze": "wm-toggle-pause"
+          },
           {
             "label": "Taskbar",
             "run": "{dir}\\winarchy.exe",
@@ -35,15 +68,27 @@
             "run": "powershell.exe",
             "args": "-NoProfile -WindowStyle Hidden -Command \"if (Get-Process zebar -ErrorAction SilentlyContinue) { Stop-Process -Name zebar } else { Start-Process \\\"$env:ProgramFiles\\glzr.io\\Zebar\\zebar.exe\\\" }\""
           },
-          { "label": "Night light", "run": "ms-settings:nightlight" },
-          { "label": "Do not disturb", "run": "ms-settings:notifications" }
+          {
+            "label": "Night light",
+            "run": "ms-settings:nightlight"
+          },
+          {
+            "label": "Do not disturb",
+            "run": "ms-settings:notifications"
+          }
         ]
       },
       {
         "label": "Style",
         "items": [
-          { "label": "Theme & accent colour", "run": "ms-settings:colors" },
-          { "label": "Background", "run": "ms-settings:personalization-background" },
+          {
+            "label": "Theme & accent colour",
+            "run": "ms-settings:colors"
+          },
+          {
+            "label": "Background",
+            "run": "ms-settings:personalization-background"
+          },
           {
             "label": "Window borders & gaps",
             "hint": "GlazeWM config",
@@ -68,19 +113,64 @@
         "id": "setup",
         "label": "Setup",
         "items": [
-          { "label": "Audio", "run": "ms-settings:sound" },
-          { "label": "Wi-Fi", "run": "ms-settings:network-wifi" },
-          { "label": "Bluetooth", "run": "ms-settings:bluetooth" },
-          { "label": "Displays", "run": "ms-settings:display" },
-          { "label": "Power & sleep", "run": "ms-settings:powersleep" },
-          { "label": "Keyboard", "run": "ms-settings:keyboard" },
-          { "label": "Mouse", "run": "ms-settings:mousetouchpad" },
-          { "label": "Printers", "run": "ms-settings:printers" },
-          { "label": "Default apps", "run": "ms-settings:defaultapps" },
-          { "label": "Startup apps", "run": "ms-settings:startupapps" },
-          { "label": "Taskbar (auto-hide)", "run": "ms-settings:taskbar" },
-          { "label": "Snap windows", "run": "ms-settings:multitasking" },
-          { "label": "Animation effects", "run": "ms-settings:easeofaccess-visualeffects" },
+          {
+            "label": "Dictation (Superwhisper)",
+            "hint": "Right Alt",
+            "run": "{dir}\\winarchy.exe",
+            "args": "launch app superwhisper SuperUltra.superwhisper"
+          },
+          {
+            "label": "Audio",
+            "run": "ms-settings:sound"
+          },
+          {
+            "label": "Wi-Fi",
+            "run": "ms-settings:network-wifi"
+          },
+          {
+            "label": "Bluetooth",
+            "run": "ms-settings:bluetooth"
+          },
+          {
+            "label": "Displays",
+            "run": "ms-settings:display"
+          },
+          {
+            "label": "Power & sleep",
+            "run": "ms-settings:powersleep"
+          },
+          {
+            "label": "Keyboard",
+            "run": "ms-settings:keyboard"
+          },
+          {
+            "label": "Mouse",
+            "run": "ms-settings:mousetouchpad"
+          },
+          {
+            "label": "Printers",
+            "run": "ms-settings:printers"
+          },
+          {
+            "label": "Default apps",
+            "run": "ms-settings:defaultapps"
+          },
+          {
+            "label": "Startup apps",
+            "run": "ms-settings:startupapps"
+          },
+          {
+            "label": "Taskbar (auto-hide)",
+            "run": "ms-settings:taskbar"
+          },
+          {
+            "label": "Snap windows",
+            "run": "ms-settings:multitasking"
+          },
+          {
+            "label": "Animation effects",
+            "run": "ms-settings:easeofaccess-visualeffects"
+          },
           {
             "id": "config",
             "label": "Config",
@@ -105,10 +195,25 @@
                 "run": "{dir}\\winarchy.exe",
                 "args": "launch app PowerToys Microsoft.PowerToys"
               },
-              { "label": "Reload GlazeWM config", "hint": "Super+Ctrl+R", "glaze": "wm-reload-config" },
-              { "label": "Redraw windows", "glaze": "wm-redraw" },
-              { "label": "Restart GlazeWM", "run": "cmd.exe", "args": "/c \"\"%ProgramFiles%\\glzr.io\\GlazeWM\\cli\\glazewm.exe\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"%ProgramFiles%\\glzr.io\\GlazeWM\\glazewm.exe\"\"" },
-              { "label": "Quit GlazeWM", "glaze": "wm-exit", "confirm": true }
+              {
+                "label": "Reload GlazeWM config",
+                "hint": "Super+Ctrl+R",
+                "glaze": "wm-reload-config"
+              },
+              {
+                "label": "Redraw windows",
+                "glaze": "wm-redraw"
+              },
+              {
+                "label": "Restart GlazeWM",
+                "run": "cmd.exe",
+                "args": "/c \"\"%ProgramFiles%\\glzr.io\\GlazeWM\\cli\\glazewm.exe\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"%ProgramFiles%\\glzr.io\\GlazeWM\\glazewm.exe\"\""
+              },
+              {
+                "label": "Quit GlazeWM",
+                "glaze": "wm-exit",
+                "confirm": true
+              }
             ]
           }
         ]
@@ -121,13 +226,24 @@
             "hint": "winget",
             "terminal": "$q = Read-Host 'Search winget for'; winget search $q; $id = Read-Host 'Package Id to install (blank to cancel)'; if ($id) { winget install --id $id -e }"
           },
-          { "label": "Microsoft Store", "run": "ms-windows-store:" }
+          {
+            "label": "Dictation (Superwhisper)",
+            "hint": "winget",
+            "terminal": "winget install --id SuperUltra.superwhisper -e"
+          },
+          {
+            "label": "Microsoft Store",
+            "run": "ms-windows-store:"
+          }
         ]
       },
       {
         "label": "Remove",
         "items": [
-          { "label": "Uninstall an app", "run": "ms-settings:appsfeatures" },
+          {
+            "label": "Uninstall an app",
+            "run": "ms-settings:appsfeatures"
+          },
           {
             "label": "Uninstall with winget",
             "hint": "winget",
@@ -143,20 +259,52 @@
             "hint": "winget",
             "terminal": "winget upgrade; if ((Read-Host 'Upgrade all of these? (y/N)') -eq 'y') { winget upgrade --all }"
           },
-          { "label": "Windows Update", "run": "ms-settings:windowsupdate" },
-          { "label": "Store app updates", "run": "ms-windows-store://downloadsandupdates" }
+          {
+            "label": "Windows Update",
+            "run": "ms-settings:windowsupdate"
+          },
+          {
+            "label": "Store app updates",
+            "run": "ms-windows-store://downloadsandupdates"
+          }
         ]
       },
-      { "label": "About this PC", "run": "ms-settings:about" },
+      {
+        "label": "About this PC",
+        "run": "ms-settings:about"
+      },
       {
         "id": "system",
         "label": "System",
         "items": [
-          { "label": "Lock", "hint": "Super+L", "run": "rundll32.exe", "args": "user32.dll,LockWorkStation" },
-          { "label": "Sleep", "builtin": "sleep" },
-          { "label": "Sign out", "run": "shutdown.exe", "args": "/l", "confirm": true },
-          { "label": "Restart", "run": "shutdown.exe", "args": "/r /t 0", "confirm": true },
-          { "label": "Shut down", "run": "shutdown.exe", "args": "/s /t 0", "confirm": true }
+          {
+            "label": "Lock",
+            "hint": "Super+L",
+            "run": "rundll32.exe",
+            "args": "user32.dll,LockWorkStation"
+          },
+          {
+            "label": "Sleep",
+            "builtin": "sleep"
+          },
+          {
+            "label": "Sign out",
+            "run": "shutdown.exe",
+            "args": "/l",
+            "confirm": true
+          },
+          {
+            "label": "Restart",
+            "run": "shutdown.exe",
+            "args": "/r /t 0",
+            "confirm": true
+          },
+          {
+            "label": "Shut down",
+            "run": "shutdown.exe",
+            "args": "/s /t 0",
+            "confirm": true
+          }
         ]
       }
     ]

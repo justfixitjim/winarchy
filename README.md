@@ -7,10 +7,11 @@ It's a thin layer over good existing tools:
 | Omarchy | winarchy |
 |---|---|
 | Hyprland tiling | [GlazeWM](https://github.com/glzr-io/glazewm), with a helper that adds Hyprland-style automatic splits |
-| Waybar | [Zebar](https://github.com/glzr-io/zebar) at the top of the screen; the Windows taskbar is hidden |
+| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, stats, weather in °F); the Windows taskbar is hidden |
 | Walker (Super+Space) | PowerToys [Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview) |
 | Omarchy menu (Super+Alt+Space) | `winarchy` menu: a searchable, arrow-key menu for system, setup, install and power actions |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
+| Superwhisper dictation on Right Alt | [Superwhisper](https://superwhisper.com/windows) for Windows with local Whisper models: hold Right Alt to talk |
 
 ## Install
 
@@ -22,10 +23,11 @@ irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | i
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
-1. Installs GlazeWM, Zebar, PowerToys and Windows Terminal with winget, skipping any already installed.
+1. Installs GlazeWM, Zebar, PowerToys, Windows Terminal and Superwhisper with winget, skipping any already installed.
 2. Builds `winarchy.exe` and `winarchy-daemon.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
-4. Starts GlazeWM now and at every sign-in.
+4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
+5. Starts GlazeWM now and at every sign-in.
 
 Re-run it any time to upgrade. Options:
 
@@ -33,6 +35,8 @@ Re-run it any time to upgrade. Options:
 - `-KeepTaskbar` leaves the taskbar visible.
 - `-KeepStartMenu` lets a lone Super tap open Start.
 - `-SkipApps` skips winget.
+- `-Celsius` shows the bar's temperature in Celsius (the default is Fahrenheit).
+- `-NoDictation` skips Superwhisper.
 
 ## Keys
 
@@ -60,6 +64,15 @@ Re-run it any time to upgrade. Options:
 
 Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, Win+R, Win+I and Win+N. Like Omarchy, tapping Super on its own does nothing; Ctrl+Esc still opens Start.
 
+## Dictation
+
+Like Omarchy, winarchy uses Superwhisper for dictation, running a local speech model on your PC. The installer installs it, but its first-run setup is yours to do once:
+
+1. Open **superwhisper** from Super+Space and go through its setup. Pick a local model: the free tier includes every Whisper model, up to Large v3 Turbo (fastest on a GPU). Superwhisper's docs list Parakeet and Cohere Transcribe as Pro models.
+2. In its settings, set **Push to talk** to **Right Alt**, and turn on **Launch at login**.
+
+Then hold Right Alt, speak, and let go: the text is pasted where your cursor is. Super+Alt+Space → Setup → Dictation reopens its settings.
+
 ## Customise
 
 - **Bindings and look:** `~\.glzr\glazewm\config.yaml`, then Super+Ctrl+R to reload. The comment line above each binding is what Super+K shows.
@@ -70,6 +83,7 @@ Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, 
   - `page` to jump to another page, or `items` for a submenu.
 - **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu` and `autotile`. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Alt+Space → Toggle → Taskbar shows or hides it on the fly.
+- **Top bar:** `~\.glzr\zebar\winarchyar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
 ## Uninstall
 
@@ -78,7 +92,7 @@ Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, 
 .\uninstall.ps1 -RemoveApps
 ```
 
-This restores the taskbar and the GlazeWM config winarchy replaced, and removes the sign-in shortcut.
+This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replaced, and removes the sign-in shortcut. Superwhisper stays installed.
 
 ## How it works
 
@@ -96,4 +110,4 @@ This restores the taskbar and the GlazeWM config winarchy replaced, and removes 
 
 ## License
 
-MIT
+MIT, except `config/zebar/bar.html` and `styles.css`, which are adapted from Zebar's starter widget and stay under GPL-3.0 (see `config/zebar/NOTICE.md`).
