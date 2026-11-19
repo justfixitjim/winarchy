@@ -69,9 +69,9 @@ Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, 
 Like Omarchy, winarchy uses Superwhisper for dictation, running a local speech model on your PC. The installer installs it, but its first-run setup is yours to do once:
 
 1. Open **superwhisper** from Super+Space and go through its setup. Pick a local model: the free tier includes every Whisper model, up to Large v3 Turbo (fastest on a GPU). Superwhisper's docs list Parakeet and Cohere Transcribe as Pro models.
-2. In its settings, set **Push to talk** to **Right Alt**, and turn on **Launch at login**.
+2. Re-run `install.ps1`. It closes Superwhisper, sets **Push to talk** to **Right Alt** and turns on **Launch on login**, then reopens it. It only does this while push-to-talk is still on Superwhisper's default (Ctrl+Space), so a key you picked yourself is kept. You can also set both in Superwhisper → Configuration.
 
-Then hold Right Alt, speak, and let go: the text is pasted where your cursor is. Super+Alt+Space → Setup → Dictation reopens its settings.
+Then hold Right Alt, speak, and let go: the text is pasted where your cursor is. A quick tap of its toggle key starts and stops a longer recording. Esc cancels. Super+Alt+Space → Setup → Dictation reopens its settings.
 
 ## Customise
 

@@ -207,7 +207,37 @@ if (Test-Path $zebarSettings) {
 }
 Write-Utf8 $zebarSettings (($zs | ConvertTo-Json -Depth 5) + "`n")
 
-# --- 7. Start at sign-in, then start now ----------------------------------------------
+# --- 7. Dictation: Superwhisper push-to-talk on Right Alt, like Omarchy -------------------
+# Superwhisper writes preferences.json during its first-run setup. Once that exists, bind
+# Right Alt, unless the user already picked their own push-to-talk key.
+$swExe = Join-Path $env:LOCALAPPDATA 'superwhisper\Superwhisper.exe'
+$swPrefs = Join-Path $env:LOCALAPPDATA 'com.superwhisper.app\preferences.json'
+$swNeedsSetup = $false
+if (-not $NoDictation -and (Test-Path $swExe)) {
+    Step 'Setting up dictation (Superwhisper)'
+    if (Test-Path $swPrefs) {
+        $sw = Get-Content $swPrefs -Raw | ConvertFrom-Json
+        if ($sw.pushToTalkShortcut -eq 'Control+Space') {
+            # Superwhisper rewrites this file on exit, so it must be closed while we edit.
+            Get-Process Superwhisper -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 1
+            Copy-Item $swPrefs "$swPrefs.bak-$stamp"
+            $sw.pushToTalkShortcut = 'AltRight'
+            $sw.p2t = $true
+            $sw.launchAtLogin = $true
+            Write-Utf8 $swPrefs (($sw | ConvertTo-Json -Depth 10) + "`n")
+            Start-Process $swExe
+            Note 'push to talk: hold Right Alt; Superwhisper starts at sign-in'
+        } else {
+            Note "push to talk is already $($sw.pushToTalkShortcut); leaving it"
+        }
+    } else {
+        $swNeedsSetup = $true
+        Note 'Superwhisper has not been set up yet (see the note at the end)'
+    }
+}
+
+# --- 8. Start at sign-in, then start now ----------------------------------------------
 Step 'Starting GlazeWM (and at every sign-in)'
 $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
 $shell = New-Object -ComObject WScript.Shell
@@ -227,8 +257,8 @@ Write-Host '  Super+Alt+Space  menu: search and arrow to anything'
 Write-Host '  Super+K          every keybinding'
 Write-Host '  Super+Shift+P    pause tiling if you need to get out of the way'
 Write-Host "  Customise: $configDir\config.yaml and $dest\menu.json"
-if (-not $NoDictation -and (Test-Path "$env:LOCALAPPDATA\superwhisper\Superwhisper.exe")) {
+if ($swNeedsSetup) {
     Write-Host ''
-    Write-Host 'Dictation (Superwhisper): open it once from Super+Space, finish its setup and pick a'
-    Write-Host 'local model, then in its settings set Push to talk to Right Alt and enable Launch at login.'
+    Write-Host 'Dictation: open superwhisper from Super+Space and finish its setup (pick a local model),'
+    Write-Host 'then re-run this installer to put push-to-talk on Right Alt.'
 }
