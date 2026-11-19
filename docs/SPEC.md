@@ -1,6 +1,6 @@
 # winarchy: features to emulate from Omarchy
 
-Planned features (section 1 is built; the rest are not). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
+Planned features (sections 1 and 4 are built; the rest are not). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
 
 Omarchy references are to [basecamp/omarchy](https://github.com/basecamp/omarchy) (`quattro` branch, November 2026).
 
@@ -134,9 +134,9 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 
 ## 4. System tray in the bar (see and close background apps)
 
-> **Status: partly built (Nov 2026).**
-> - Done: the collapsible tray (count when collapsed, remembered between restarts), with left, double, right and middle clicks and hover passed to each app. Right-click → the app's Quit closes it.
-> - Still open: the hover × / force-close, hidden icons, and tray apps in menu search. Zebar's systray output (3.3.1) gives only `id`, `tooltip` and the icon image, with no owner window or process, so closing from the bar needs the tooltip-matching approach below.
+> **Status: shipped (Nov 2026).**
+> - Built: the collapsible tray (count when collapsed, remembered between restarts), with left, double, right and middle clicks and hover passed to each app. Right-click → the app's Quit closes it, which covers the need.
+> - Optional extras, not planned: the hover × / force-close, hidden icons, and tray apps in menu search. Zebar's systray output (3.3.1) gives only `id`, `tooltip` and the icon image, with no owner window or process, so closing from the bar would need the tooltip-matching approach below.
 
 ### Why
 
@@ -174,6 +174,6 @@ winarchy hides the taskbar, which also hides the notification area. Apps that li
 ## Suggested order
 
 1. ~~**Media utilities.**~~ Built.
-2. **System tray in the bar.** Small, and it fixes a real gap that hiding the taskbar created.
+2. ~~**System tray in the bar.**~~ Shipped.
 3. **Theming.** The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
 4. **AI usage panel and switching.** It depends on undocumented usage endpoints, so expect upkeep when they change.
