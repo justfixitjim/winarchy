@@ -133,6 +133,10 @@ This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replace
 - GlazeWM only tiles windows running as administrator if it runs as administrator too.
 - With the taskbar hidden, tray icons aren't visible. Use the Taskbar toggle to reach them, or open those apps from the launcher.
 
+## Roadmap
+
+Planned Omarchy features (media tools, automatic theming, an AI usage panel) are specced in [docs/SPEC.md](docs/SPEC.md).
+
 ## License
 
 MIT, except `config/zebar/bar.html` and `styles.css`, which are adapted from Zebar's starter widget and stay under GPL-3.0 (see `config/zebar/NOTICE.md`).
