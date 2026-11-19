@@ -11,7 +11,7 @@ It's a thin layer over good existing tools:
 | Walker (Super+Space) | PowerToys [Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview) |
 | Omarchy menu (Super+Alt+Space) | `winarchy` menu: a searchable, arrow-key menu for system, setup, install and power actions |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
-| Superwhisper dictation on Right Alt | [Superwhisper](https://superwhisper.com/windows) for Windows with local Whisper models: hold Right Alt to talk |
+| Superwhisper dictation on Right Alt | [Superwhisper](https://superwhisper.com/windows) for Windows with local models: hold **Right Ctrl** to talk (Superwhisper for Windows can't use Right Alt) |
 
 ## Install
 
@@ -69,9 +69,11 @@ Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, 
 Like Omarchy, winarchy uses Superwhisper for dictation, running a local speech model on your PC. The installer installs it, but its first-run setup is yours to do once:
 
 1. Open **superwhisper** from Super+Space and go through its setup. Pick a local model: the free tier includes every Whisper model, up to Large v3 Turbo (fastest on a GPU). Superwhisper's docs list Parakeet and Cohere Transcribe as Pro models.
-2. Re-run `install.ps1`. It closes Superwhisper, sets **Push to talk** to **Right Alt** and turns on **Launch on login**, then reopens it. It only does this while push-to-talk is still on Superwhisper's default (Ctrl+Space), so a key you picked yourself is kept. You can also set both in Superwhisper → Configuration.
+2. Re-run `install.ps1`. It closes Superwhisper, sets **Push to talk** to **Right Ctrl** and turns on **Launch on login**, then reopens it. It only does this while push-to-talk is still on Superwhisper's default (Ctrl+Space), so a key you picked yourself is kept. You can also set both in Superwhisper → Configuration.
 
-Then hold Right Alt, speak, and let go: the text is pasted where your cursor is. A quick tap of its toggle key starts and stops a longer recording. Esc cancels. Super+Alt+Space → Setup → Dictation reopens its settings.
+Then hold Right Ctrl, speak, and let go: the text is pasted where your cursor is. A quick tap of Right Ctrl starts and stops a longer recording, and Esc cancels.
+
+Why not Right Alt like Omarchy? Superwhisper for Windows never sees a Right Alt press, so it falls through to the focused app and opens its menus. Right Ctrl does nothing on its own in apps. Super+Alt+Space → Setup → Dictation reopens its settings.
 
 ## Customise
 

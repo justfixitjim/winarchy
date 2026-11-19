@@ -30,7 +30,7 @@ param(
     [switch]$SkipApps,
     # Show the bar's temperature in Celsius instead of Fahrenheit.
     [switch]$Celsius,
-    # Don't install Superwhisper (dictation on Right Alt, like Omarchy).
+    # Don't install Superwhisper (local dictation, hold Right Ctrl to talk).
     [switch]$NoDictation
 )
 
@@ -207,9 +207,11 @@ if (Test-Path $zebarSettings) {
 }
 Write-Utf8 $zebarSettings (($zs | ConvertTo-Json -Depth 5) + "`n")
 
-# --- 7. Dictation: Superwhisper push-to-talk on Right Alt, like Omarchy -------------------
+# --- 7. Dictation: Superwhisper push-to-talk on Right Ctrl -----------------------------------
 # Superwhisper writes preferences.json during its first-run setup. Once that exists, bind
-# Right Alt, unless the user already picked their own push-to-talk key.
+# Right Ctrl, unless the user already picked their own push-to-talk key. (Omarchy uses
+# Right Alt, but Superwhisper for Windows never sees Right Alt, so the press falls through
+# to the focused app and opens its menus. 'AltRight' is migrated from earlier versions.)
 $swExe = Join-Path $env:LOCALAPPDATA 'superwhisper\Superwhisper.exe'
 $swPrefs = Join-Path $env:LOCALAPPDATA 'com.superwhisper.app\preferences.json'
 $swNeedsSetup = $false
@@ -217,17 +219,17 @@ if (-not $NoDictation -and (Test-Path $swExe)) {
     Step 'Setting up dictation (Superwhisper)'
     if (Test-Path $swPrefs) {
         $sw = Get-Content $swPrefs -Raw | ConvertFrom-Json
-        if ($sw.pushToTalkShortcut -eq 'Control+Space') {
+        if ($sw.pushToTalkShortcut -in 'Control+Space', 'AltRight') {
             # Superwhisper rewrites this file on exit, so it must be closed while we edit.
             Get-Process Superwhisper -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-Sleep -Seconds 1
             Copy-Item $swPrefs "$swPrefs.bak-$stamp"
-            $sw.pushToTalkShortcut = 'AltRight'
+            $sw.pushToTalkShortcut = 'ControlRight'
             $sw.p2t = $true
             $sw.launchAtLogin = $true
             Write-Utf8 $swPrefs (($sw | ConvertTo-Json -Depth 10) + "`n")
             Start-Process $swExe
-            Note 'push to talk: hold Right Alt; Superwhisper starts at sign-in'
+            Note 'push to talk: hold Right Ctrl (tap to toggle); Superwhisper starts at sign-in'
         } else {
             Note "push to talk is already $($sw.pushToTalkShortcut); leaving it"
         }
@@ -260,5 +262,5 @@ Write-Host "  Customise: $configDir\config.yaml and $dest\menu.json"
 if ($swNeedsSetup) {
     Write-Host ''
     Write-Host 'Dictation: open superwhisper from Super+Space and finish its setup (pick a local model),'
-    Write-Host 'then re-run this installer to put push-to-talk on Right Alt.'
+    Write-Host 'then re-run this installer to put push-to-talk on Right Ctrl.'
 }

@@ -115,7 +115,7 @@
         "items": [
           {
             "label": "Dictation (Superwhisper)",
-            "hint": "Right Alt",
+            "hint": "Right Ctrl",
             "run": "{dir}\\winarchy.exe",
             "args": "launch app superwhisper SuperUltra.superwhisper"
           },
