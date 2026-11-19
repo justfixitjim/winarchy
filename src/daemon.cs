@@ -1,0 +1,366 @@
+// winarchy-daemon.exe: background helper started by GlazeWM.
+//
+//  * Super key  - stops Windows opening the Start menu when Super is pressed, so
+//                 Super+key combos never leave Start open behind them (Omarchy
+//                 behaviour: Super alone does nothing; Ctrl+Esc still opens Start).
+//  * Taskbar    - auto-hides and hides the Windows taskbar while running, and puts
+//                 it back when stopped.
+//  * Autotile   - Hyprland "dwindle"-style splits: a tiling window that gains focus
+//                 gets a split direction matching its shape, so the next window
+//                 halves it along its longer edge.
+//
+//   winarchy-daemon                    run (single instance)
+//   winarchy-daemon --stop             stop the running daemon and restore the taskbar
+//   winarchy-daemon --taskbar          toggle the taskbar (also: winarchy taskbar)
+//   winarchy-daemon --restore-taskbar  show the taskbar and restore auto-hide (no daemon needed)
+//
+// Options live in settings.json next to the exe:
+//   { "hideTaskbar": true, "blockStartMenu": true, "autotile": true }
+//
+// Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.WebSockets;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+using System.Windows.Forms;
+
+static class Daemon
+{
+    static readonly string Dir = Path.GetDirectoryName(Application.ExecutablePath);
+    static readonly string SettingsPath = Path.Combine(Dir, "settings.json");
+    static readonly string OriginalAutoHidePath = Path.Combine(Dir, ".taskbar-autohide-before");
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+
+    static Dictionary<string, object> settings;
+    static Control ui;
+
+    [STAThread]
+    static void Main(string[] args)
+    {
+        string arg = args.Length > 0 ? args[0].ToLowerInvariant() : "";
+        if (arg == "--stop") { Signal(@"Local\winarchy-daemon-stop"); return; }
+        if (arg == "--taskbar") { Signal(@"Local\winarchy-daemon-taskbar"); return; }
+        if (arg == "--restore-taskbar") { Taskbar.Restore(OriginalAutoHidePath); return; }
+
+        bool created;
+        using (new Mutex(true, @"Local\winarchy-daemon", out created))
+        {
+            if (!created) return;
+            settings = LoadSettings();
+
+            ui = new Control();
+            ui.CreateControl();
+            IntPtr force = ui.Handle;
+
+            if (Flag("blockStartMenu", true)) SuperKey.Install(ui);
+
+            var taskbarTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            taskbarTimer.Tick += delegate { if (Flag("hideTaskbar", true)) Taskbar.Hide(OriginalAutoHidePath); };
+            taskbarTimer.Start();
+            if (Flag("hideTaskbar", true)) Taskbar.Hide(OriginalAutoHidePath);
+
+            OnEvent(@"Local\winarchy-daemon-stop", delegate
+            {
+                Taskbar.Restore(OriginalAutoHidePath);
+                SuperKey.Remove();
+                Application.ExitThread();
+            });
+            OnEvent(@"Local\winarchy-daemon-taskbar", delegate
+            {
+                bool hide = !Flag("hideTaskbar", true);
+                settings["hideTaskbar"] = hide;
+                SaveSettings();
+                if (hide) Taskbar.Hide(OriginalAutoHidePath); else Taskbar.Restore(OriginalAutoHidePath);
+            });
+
+            if (Flag("autotile", true))
+            {
+                var t = new Thread(Autotile.Loop) { IsBackground = true };
+                t.Start();
+            }
+
+            Application.Run();
+        }
+    }
+
+    static void Signal(string name)
+    {
+        EventWaitHandle ev;
+        if (EventWaitHandle.TryOpenExisting(name, out ev)) ev.Set();
+    }
+
+    // Runs `action` on the UI thread each time the named event is set.
+    static void OnEvent(string name, MethodInvoker action)
+    {
+        var ev = new EventWaitHandle(false, EventResetMode.AutoReset, name);
+        var t = new Thread(() =>
+        {
+            while (true)
+            {
+                ev.WaitOne();
+                try { ui.BeginInvoke(action); } catch { }
+            }
+        }) { IsBackground = true };
+        t.Start();
+    }
+
+    static bool Flag(string key, bool fallback)
+    {
+        object v;
+        return settings != null && settings.TryGetValue(key, out v) && v is bool ? (bool)v : fallback;
+    }
+
+    static Dictionary<string, object> LoadSettings()
+    {
+        try
+        {
+            var d = Json.DeserializeObject(File.ReadAllText(SettingsPath, Encoding.UTF8)) as Dictionary<string, object>;
+            if (d != null) return d;
+        }
+        catch { }
+        return new Dictionary<string, object>();
+    }
+
+    static void SaveSettings()
+    {
+        try
+        {
+            var sb = new StringBuilder("{\n");
+            int i = 0;
+            foreach (var kv in settings)
+            {
+                sb.Append("  \"" + kv.Key + "\": " + Json.Serialize(kv.Value));
+                sb.Append(++i < settings.Count ? ",\n" : "\n");
+            }
+            sb.Append("}\n");
+            File.WriteAllText(SettingsPath, sb.ToString(), new UTF8Encoding(false));
+        }
+        catch { }
+    }
+}
+
+// Windows opens Start when the Super key is released without any other key
+// having gone through. GlazeWM swallows the keys of its Super+key bindings,
+// so Windows thinks Super was tapped alone. Injecting an unassigned key
+// (0xE8, the same "menu mask" key AutoHotkey uses) as soon as Super goes down
+// tells Windows the press was used, so Start never opens from the Super key.
+static class SuperKey
+{
+    delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SetWindowsHookEx(int id, HookProc fn, IntPtr mod, uint thread);
+    [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
+    [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll")] static extern IntPtr GetModuleHandle(string name);
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    const int WH_KEYBOARD_LL = 13;
+    const int VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_MASK = 0xE8;
+
+    static readonly HookProc Proc = Callback; // kept alive for the GC
+    static IntPtr hook;
+    static bool superDown;
+    static Control Target;
+
+    static void SendMask()
+    {
+        keybd_event(VK_MASK, 0, 0, UIntPtr.Zero);
+        keybd_event(VK_MASK, 0, 2, UIntPtr.Zero);
+    }
+
+    public static void Install(Control uiThread)
+    {
+        Target = uiThread;
+        if (hook == IntPtr.Zero) hook = SetWindowsHookEx(WH_KEYBOARD_LL, Proc, GetModuleHandle(null), 0);
+    }
+
+    public static void Remove()
+    {
+        if (hook != IntPtr.Zero) UnhookWindowsHookEx(hook);
+        hook = IntPtr.Zero;
+    }
+
+    static IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
+    {
+        if (code >= 0)
+        {
+            int vk = Marshal.ReadInt32(lParam); // KBDLLHOOKSTRUCT.vkCode
+            if (vk == VK_LWIN || vk == VK_RWIN)
+            {
+                int msg = wParam.ToInt32();
+                bool down = msg == 0x100 || msg == 0x104; // WM_KEYDOWN, WM_SYSKEYDOWN
+                if (down && !superDown)
+                {
+                    superDown = true;
+                    // Inject after this callback returns, so Windows sees Super down
+                    // first and the mask key second. Injecting from inside the
+                    // callback lands too early and does nothing.
+                    if (Target != null) Target.BeginInvoke((MethodInvoker)SendMask);
+                }
+                else if (!down) superDown = false;
+            }
+        }
+        return CallNextHookEx(hook, code, wParam, lParam);
+    }
+}
+
+// Omarchy has no taskbar: set it to auto-hide (so windows get the full screen)
+// and hide its windows outright (so it never slides back in).
+static class Taskbar
+{
+    [StructLayout(LayoutKind.Sequential)]
+    struct APPBARDATA
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uCallbackMessage;
+        public uint uEdge;
+        public int left, top, right, bottom;
+        public IntPtr lParam;
+    }
+
+    delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("shell32.dll")] static extern UIntPtr SHAppBarMessage(uint msg, ref APPBARDATA data);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc fn, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int max);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+
+    const uint ABM_GETSTATE = 4, ABM_SETSTATE = 10;
+    const int ABS_AUTOHIDE = 1, ABS_ALWAYSONTOP = 2;
+
+    static List<IntPtr> Windows()
+    {
+        var list = new List<IntPtr>();
+        EnumWindows((h, l) =>
+        {
+            var sb = new StringBuilder(64);
+            GetClassName(h, sb, sb.Capacity);
+            string c = sb.ToString();
+            if (c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd") list.Add(h);
+            return true;
+        }, IntPtr.Zero);
+        return list;
+    }
+
+    static bool AutoHide
+    {
+        get
+        {
+            var d = new APPBARDATA { cbSize = Marshal.SizeOf(typeof(APPBARDATA)) };
+            return ((ulong)SHAppBarMessage(ABM_GETSTATE, ref d) & ABS_AUTOHIDE) != 0;
+        }
+        set
+        {
+            var d = new APPBARDATA
+            {
+                cbSize = Marshal.SizeOf(typeof(APPBARDATA)),
+                hWnd = FindWindow("Shell_TrayWnd", null),
+                lParam = new IntPtr(value ? ABS_AUTOHIDE : ABS_ALWAYSONTOP)
+            };
+            SHAppBarMessage(ABM_SETSTATE, ref d);
+        }
+    }
+
+    public static void Hide(string originalPath)
+    {
+        if (FindWindow("Shell_TrayWnd", null) == IntPtr.Zero) return; // Explorer not up yet
+        if (!AutoHide)
+        {
+            if (!File.Exists(originalPath)) File.WriteAllText(originalPath, "0");
+            AutoHide = true;
+        }
+        else if (!File.Exists(originalPath)) File.WriteAllText(originalPath, "1");
+        foreach (var h in Windows())
+            if (IsWindowVisible(h)) ShowWindow(h, 0); // SW_HIDE
+    }
+
+    public static void Restore(string originalPath)
+    {
+        foreach (var h in Windows()) ShowWindow(h, 8); // SW_SHOWNA
+        if (File.Exists(originalPath))
+        {
+            bool before = File.ReadAllText(originalPath).Trim() == "1";
+            if (AutoHide != before) AutoHide = before;
+            File.Delete(originalPath);
+        }
+    }
+}
+
+// Listens on GlazeWM's IPC socket and sets the split direction on focus.
+static class Autotile
+{
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+
+    public static void Loop()
+    {
+        while (true)
+        {
+            try { Run().Wait(); } catch { }
+            Thread.Sleep(2000); // GlazeWM not running yet, or restarted
+        }
+    }
+
+    static async Task Run()
+    {
+        using (var ws = new ClientWebSocket())
+        {
+            await ws.ConnectAsync(new Uri("ws://127.0.0.1:6123"), CancellationToken.None);
+            await Send(ws, "sub -e focus_changed");
+            var buf = new byte[16384];
+            while (ws.State == WebSocketState.Open)
+            {
+                var ms = new MemoryStream();
+                WebSocketReceiveResult r;
+                do
+                {
+                    r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
+                    if (r.MessageType == WebSocketMessageType.Close) return;
+                    ms.Write(buf, 0, r.Count);
+                } while (!r.EndOfMessage);
+
+                string dir = Decide(Encoding.UTF8.GetString(ms.ToArray()));
+                if (dir != null) await Send(ws, "command set-tiling-direction " + dir);
+            }
+        }
+    }
+
+    static string Decide(string message)
+    {
+        var msg = Json.DeserializeObject(message) as Dictionary<string, object>;
+        var data = Get(msg, "data");
+        if (data == null || Str(data, "eventType") != "focus_changed") return null;
+        var win = Get(data, "focusedContainer");
+        if (win == null || Str(win, "type") != "window") return null;
+        var state = Get(win, "state");
+        if (state == null || Str(state, "type") != "tiling") return null;
+        double w = Convert.ToDouble(win["width"]), h = Convert.ToDouble(win["height"]);
+        return w >= h ? "horizontal" : "vertical";
+    }
+
+    static Dictionary<string, object> Get(Dictionary<string, object> d, string key)
+    {
+        object v;
+        return d != null && d.TryGetValue(key, out v) ? v as Dictionary<string, object> : null;
+    }
+
+    static string Str(Dictionary<string, object> d, string key)
+    {
+        object v;
+        return d.TryGetValue(key, out v) && v != null ? v.ToString() : null;
+    }
+
+    static Task Send(ClientWebSocket ws, string text)
+    {
+        var bytes = Encoding.UTF8.GetBytes(text);
+        return ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+}

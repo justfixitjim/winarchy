@@ -1,0 +1,68 @@
+<#
+.SYNOPSIS
+    Removes winarchy and puts Windows back the way it was.
+
+.DESCRIPTION
+    Stops GlazeWM, restores the taskbar, removes the sign-in shortcut and the
+    ~\.glzr\winarchy folder, and restores the GlazeWM config that winarchy replaced
+    (if there was one). Apps stay installed unless you pass -RemoveApps.
+
+.EXAMPLE
+    .\uninstall.ps1
+    .\uninstall.ps1 -RemoveApps
+#>
+[CmdletBinding()]
+param(
+    # Also uninstall GlazeWM and Zebar with winget (PowerToys is left alone).
+    [switch]$RemoveApps
+)
+
+$ErrorActionPreference = 'Stop'
+function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
+
+$dest      = Join-Path $env:USERPROFILE '.glzr\winarchy'
+$config    = Join-Path $env:USERPROFILE '.glzr\glazewm\config.yaml'
+$glazeCli  = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
+$daemon    = Join-Path $dest 'winarchy-daemon.exe'
+
+Step 'Stopping GlazeWM and winarchy'
+if ((Get-Process glazewm -ErrorAction SilentlyContinue) -and (Test-Path $glazeCli)) {
+    & $glazeCli command wm-exit 2>$null | Out-Null
+    Start-Sleep -Seconds 2
+}
+if (Test-Path $daemon) {
+    & $daemon --stop
+    Start-Sleep -Milliseconds 800
+    Get-Process winarchy, winarchy-daemon -ErrorAction SilentlyContinue | Stop-Process -Force
+    & $daemon --restore-taskbar   # in case the daemon was not running
+    Start-Sleep -Milliseconds 500
+}
+
+Step 'Removing sign-in shortcut'
+$startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
+if (Test-Path $startup) { Remove-Item $startup -Force }
+
+Step 'Restoring GlazeWM config'
+if (Test-Path $config) {
+    # The oldest backup that isn't itself a winarchy config is the one it replaced.
+    $backup = Get-ChildItem "$config.bak-*" -ErrorAction SilentlyContinue | Sort-Object Name |
+        Where-Object { (Get-Content $_.FullName -Raw) -notmatch 'winarchy' } | Select-Object -First 1
+    if ((Get-Content $config -Raw) -match 'winarchy') {
+        Move-Item $config "$config.winarchy-removed" -Force
+        if ($backup) { Copy-Item $backup.FullName $config; Write-Host "    restored $($backup.Name)" }
+        else { Write-Host '    moved winarchy config aside (GlazeWM writes its default on next start)' }
+    }
+}
+
+Step "Removing $dest"
+if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+$cache = Join-Path $env:LOCALAPPDATA 'winarchy'
+if (Test-Path $cache) { Remove-Item $cache -Recurse -Force }
+
+if ($RemoveApps) {
+    Step 'Uninstalling GlazeWM and Zebar'
+    winget uninstall --id glzr-io.glazewm -e --disable-interactivity
+    winget uninstall --id glzr-io.zebar -e --disable-interactivity
+}
+
+Write-Host 'winarchy removed.' -ForegroundColor Green

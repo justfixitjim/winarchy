@@ -1,0 +1,194 @@
+<#
+.SYNOPSIS
+    Installs winarchy: Omarchy-style, keyboard-driven tiling for Windows 11.
+
+.DESCRIPTION
+    - Installs GlazeWM (+ Zebar bar) and PowerToys (for Command Palette) with winget.
+    - Builds winarchy.exe and winarchy-daemon.exe from source with the C# compiler
+      that ships with Windows (nothing prebuilt is downloaded).
+    - Writes the GlazeWM config (workspaces laid out for your monitors) and the menu,
+      backing up anything it replaces.
+    - Starts GlazeWM now and at every sign-in.
+
+    Safe to re-run: it upgrades in place.
+
+.EXAMPLE
+    irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | iex
+
+.EXAMPLE
+    .\install.ps1 -KeepConfig -KeepTaskbar
+#>
+[CmdletBinding()]
+param(
+    # Don't overwrite an existing GlazeWM config or menu.json.
+    [switch]$KeepConfig,
+    # Leave the Windows taskbar visible.
+    [switch]$KeepTaskbar,
+    # Let a lone Super key tap open the Start menu as usual.
+    [switch]$KeepStartMenu,
+    # Don't install or upgrade apps with winget.
+    [switch]$SkipApps
+)
+
+$ErrorActionPreference = 'Stop'
+$Repo = 'justfixitjim/winarchy'
+
+# --- Bootstrap: when run as "irm ... | iex" there is no checkout, so fetch one. ---
+$here = $PSScriptRoot
+if (-not $here -or -not (Test-Path (Join-Path $here 'src\winarchy.cs'))) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $tmp = Join-Path $env:TEMP ('winarchy-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    Write-Host "==> Downloading $Repo" -ForegroundColor Cyan
+    Invoke-WebRequest "https://github.com/$Repo/archive/refs/heads/main.zip" -OutFile "$tmp\repo.zip" -UseBasicParsing
+    Expand-Archive "$tmp\repo.zip" -DestinationPath $tmp
+    $root = Get-ChildItem $tmp -Directory | Select-Object -First 1
+    $forward = @()
+    foreach ($k in $PSBoundParameters.Keys) { $forward += "-$k" }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root.FullName 'install.ps1') @forward
+    return
+}
+
+function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
+function Note($msg) { Write-Host "    $msg" }
+function Write-Utf8($path, $text) { [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding $false)) }
+# Runs a native command without PowerShell 5.1 turning its stderr into a terminating error.
+function Quiet([scriptblock]$Block) {
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { & $Block 2>$null | Out-Null } finally { $ErrorActionPreference = $old }
+}
+
+$glzr      = Join-Path $env:USERPROFILE '.glzr'
+$dest      = Join-Path $glzr 'winarchy'
+$configDir = Join-Path $glzr 'glazewm'
+$glazeExe  = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\glazewm.exe'
+$glazeCli  = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
+$zebarExe  = Join-Path $env:ProgramFiles 'glzr.io\Zebar\zebar.exe'
+$stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
+
+if ([Environment]::OSVersion.Version.Build -lt 22000) {
+    Write-Warning 'winarchy is built for Windows 11. Continuing, but some parts may not work.'
+}
+
+# --- 1. Apps ---------------------------------------------------------------------
+if (-not $SkipApps) {
+    Step 'Installing apps with winget'
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw 'winget is missing. Install "App Installer" from the Microsoft Store, then re-run.'
+    }
+    $apps = @(
+        @{ Id = 'glzr-io.glazewm';           Name = 'GlazeWM';          Present = { Test-Path $glazeExe } },
+        @{ Id = 'glzr-io.zebar';             Name = 'Zebar';            Present = { Test-Path $zebarExe } },
+        @{ Id = 'Microsoft.PowerToys';       Name = 'PowerToys';        Present = { [bool](Get-AppxPackage -Name 'Microsoft.CommandPalette' -ErrorAction SilentlyContinue) } },
+        @{ Id = 'Microsoft.WindowsTerminal'; Name = 'Windows Terminal'; Present = { Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe" } }
+    )
+    foreach ($app in $apps) {
+        if (& $app.Present) { Note "$($app.Name): already installed"; continue }
+        Note "$($app.Name): installing (approve the UAC prompt if one appears)"
+        Quiet { winget install --id $app.Id -e --accept-source-agreements --accept-package-agreements --disable-interactivity }
+        if (-not (& $app.Present)) { Write-Warning "$($app.Name) did not install cleanly (winget exit code $LASTEXITCODE)." }
+    }
+}
+if (-not (Test-Path $glazeExe)) { throw "GlazeWM is not installed at $glazeExe. Re-run without -SkipApps." }
+
+# --- 2. Stop anything already running -----------------------------------------------
+Step 'Stopping running winarchy / GlazeWM'
+if (Get-Process glazewm -ErrorAction SilentlyContinue) {
+    Quiet { & $glazeCli command wm-exit }
+    for ($i = 0; $i -lt 20 -and (Get-Process glazewm -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }
+}
+$daemon = Join-Path $dest 'winarchy-daemon.exe'
+if (Test-Path $daemon) { & $daemon --stop; Start-Sleep -Milliseconds 800 }
+Get-Process winarchy, winarchy-daemon, winarchy-menu, winarchy-autotile -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 300
+
+# --- 3. Build the helpers ----------------------------------------------------------
+Step "Building helpers into $dest"
+New-Item -ItemType Directory -Force -Path $dest, $configDir | Out-Null
+$csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+if (-not (Test-Path $csc)) { throw ".NET Framework C# compiler not found at $csc" }
+$common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
+& $csc @common "/out:$dest\winarchy.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
+    /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll "$here\src\winarchy.cs"
+if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
+& $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
+if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
+Copy-Item "$here\README.md" $dest -Force
+
+# Files from the pre-release layout.
+foreach ($old in 'winarchy-menu.exe', 'winarchy-autotile.exe', 'build.ps1', 'src') {
+    $p = Join-Path $dest $old
+    if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+}
+
+# --- 4. Settings -----------------------------------------------------------------------
+$settingsPath = Join-Path $dest 'settings.json'
+$settings = [ordered]@{ hideTaskbar = $true; blockStartMenu = $true; autotile = $true }
+if (Test-Path $settingsPath) {
+    $existing = Get-Content $settingsPath -Raw | ConvertFrom-Json
+    foreach ($p in $existing.PSObject.Properties) { $settings[$p.Name] = $p.Value }
+}
+if ($KeepTaskbar) { $settings.hideTaskbar = $false }
+if ($KeepStartMenu) { $settings.blockStartMenu = $false }
+Write-Utf8 $settingsPath (($settings | ConvertTo-Json) + "`n")
+Note "settings.json: hideTaskbar=$($settings.hideTaskbar) blockStartMenu=$($settings.blockStartMenu) autotile=$($settings.autotile)"
+
+# --- 5. Menu and GlazeWM config -----------------------------------------------------
+function Install-File($source, $target, $content) {
+    if (Test-Path $target) {
+        $current = [IO.File]::ReadAllText($target)
+        if ($current -eq $content) { Note "$target is up to date"; return }
+        if ($KeepConfig) { Note "keeping your $target (-KeepConfig)"; return }
+        Copy-Item $target "$target.bak-$stamp"
+        Note "backed up $target -> $(Split-Path -Leaf $target).bak-$stamp"
+    }
+    Write-Utf8 $target $content
+    Note "wrote $target"
+}
+
+Step 'Writing the menu and GlazeWM config'
+Install-File "$here\config\menu.json" (Join-Path $dest 'menu.json') ([IO.File]::ReadAllText("$here\config\menu.json"))
+
+# Workspaces: primary monitor gets 1-5, the others (left to right) share 6-9.
+Add-Type -AssemblyName System.Windows.Forms
+$screens = @([System.Windows.Forms.Screen]::AllScreens | Sort-Object { $_.Bounds.X }, { $_.Bounds.Y })
+$lines = New-Object System.Collections.Generic.List[string]
+if ($screens.Count -le 1) {
+    1..9 | ForEach-Object { $lines.Add("  - name: '$_'") }
+} else {
+    $primary = [array]::IndexOf($screens, ($screens | Where-Object Primary | Select-Object -First 1))
+    $others = @(0..($screens.Count - 1) | Where-Object { $_ -ne $primary })
+    1..5 | ForEach-Object { $lines.Add("  - name: '$_'"); $lines.Add("    bind_to_monitor: $primary") }
+    $n = 6
+    for ($i = 0; $i -lt $others.Count -and $n -le 9; $i++) {
+        $share = [math]::Ceiling((10 - $n) / ($others.Count - $i))
+        for ($j = 0; $j -lt $share -and $n -le 9; $j++, $n++) {
+            $lines.Add("  - name: '$n'"); $lines.Add("    bind_to_monitor: $($others[$i])")
+        }
+    }
+}
+Note ("{0} monitor(s) found; primary is monitor {1}" -f $screens.Count, [math]::Max(0, [array]::IndexOf($screens, ($screens | Where-Object Primary | Select-Object -First 1))))
+$template = [IO.File]::ReadAllText("$here\config\glazewm.yaml")
+$config = $template.Replace('{{WORKSPACES}}', ($lines -join "`n"))
+Install-File "$here\config\glazewm.yaml" (Join-Path $configDir 'config.yaml') $config
+
+# --- 6. Start at sign-in, then start now ----------------------------------------------
+Step 'Starting GlazeWM (and at every sign-in)'
+$startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
+$shell = New-Object -ComObject WScript.Shell
+$lnk = $shell.CreateShortcut($startup)
+$lnk.TargetPath = $glazeExe
+$lnk.WorkingDirectory = $env:USERPROFILE
+$lnk.Save()
+Note "startup shortcut: $startup"
+Start-Process $glazeExe
+Start-Sleep -Seconds 3
+if (Get-Process glazewm -ErrorAction SilentlyContinue) { Note 'GlazeWM is running' } else { Write-Warning 'GlazeWM did not start; see ~\.glzr\glazewm\errors.log' }
+
+Write-Host ''
+Write-Host 'winarchy is installed.' -ForegroundColor Green
+Write-Host '  Super+Space      launcher (Command Palette)'
+Write-Host '  Super+Alt+Space  menu: search and arrow to anything'
+Write-Host '  Super+K          every keybinding'
+Write-Host '  Super+Shift+P    pause tiling if you need to get out of the way'
+Write-Host "  Customise: $configDir\config.yaml and $dest\menu.json"
