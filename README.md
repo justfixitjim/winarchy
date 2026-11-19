@@ -7,7 +7,7 @@ It's a thin layer over good existing tools:
 | Omarchy | winarchy |
 |---|---|
 | Hyprland tiling | [GlazeWM](https://github.com/glzr-io/glazewm), with a helper that adds Hyprland-style automatic splits |
-| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, stats, weather in °F); the Windows taskbar is hidden |
+| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, volume, stats, weather in °F); the Windows taskbar is hidden |
 | Walker (Super+Space) | PowerToys [Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview) |
 | Omarchy menu (Super+Alt+Space) | `winarchy` menu: a searchable, arrow-key menu for system, setup, install and power actions |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
@@ -63,6 +63,16 @@ Re-run it any time to upgrade. Options:
 | Super+Ctrl+R | Reload config |
 
 Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, Win+R, Win+I and Win+N. Like Omarchy, tapping Super on its own does nothing; Ctrl+Esc still opens Start.
+
+## Top bar
+
+- **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
+- **Workspace numbers** switch workspaces when clicked.
+- **Volume:**
+  - Scroll over it to change the volume.
+  - Hover to reveal a slider.
+  - Click the speaker to mute or unmute.
+  - Right-click for Windows sound settings.
 
 ## Dictation
 

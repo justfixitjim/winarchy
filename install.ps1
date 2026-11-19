@@ -186,8 +186,13 @@ $pack = Join-Path $zebarDir 'winarchy'
 New-Item -ItemType Directory -Force -Path $pack | Out-Null
 Copy-Item "$here\config\zebar\*" $pack -Force
 $unit = 'F'; if ($Celsius) { $unit = 'C' }
+# The bar's logo button runs winarchy.exe; Zebar only allows a program whose path in the
+# HTML exactly matches the one whitelisted in zpack.json, so both get the same string.
+$winarchyPath = (Join-Path $dest 'winarchy.exe').Replace('\', '/')
 $barHtml = Join-Path $pack 'bar.html'
-Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';"))
+Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")))
+$zpack = Join-Path $pack 'zpack.json'
+Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')))
 Note "temperature in degrees $unit"
 $zebarSettings = Join-Path $zebarDir 'settings.json'
 $wantStartup = '[{"pack":"winarchy","widget":"bar","preset":"default"}]'

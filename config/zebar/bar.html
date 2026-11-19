@@ -29,6 +29,15 @@
       // winarchy's install.ps1 sets this; pass -Celsius to it for Celsius.
       const TEMP_UNIT = 'F';
 
+      // winarchy's menu app. install.ps1 fills in the path (it must match the
+      // shellCommands privilege in zpack.json exactly).
+      const WINARCHY = '{{WINARCHY_EXE}}';
+
+      // Runs an allowed program without waiting for it to exit.
+      function run(program, args) {
+        zebar.shellSpawn(program, args).catch(err => console.error(err));
+      }
+
       const providers = zebar.createProviderGroup({
         network: { type: 'network' },
         glazewm: { type: 'glazewm' },
@@ -37,9 +46,39 @@
         battery: { type: 'battery' },
         memory: { type: 'memory' },
         weather: { type: 'weather' },
+        audio: { type: 'audio' },
       });
 
       createRoot(document.getElementById('root')).render(<App />);
+
+      // Volume: scroll to change, click the icon to mute, drag the slider (shown on
+      // hover), right-click for Windows sound settings.
+      function Volume({ audio }) {
+        const device = audio.defaultPlaybackDevice;
+        const volume = device.volume;
+        const set = v => audio.setVolume(Math.max(0, Math.min(100, Math.round(v))));
+        const icon = device.isMuted || volume === 0
+          ? 'nf-md-volume_off'
+          : volume < 34 ? 'nf-md-volume_low'
+          : volume < 67 ? 'nf-md-volume_medium'
+          : 'nf-md-volume_high';
+        return (
+          <div
+            className={`volume ${device.isMuted ? 'muted' : ''}`}
+            title={device.name}
+            onWheel={e => set(volume + (e.deltaY < 0 ? 2 : -2))}
+            onContextMenu={e => { e.preventDefault(); run('explorer.exe', 'ms-settings:sound'); }}
+          >
+            {/* Slider first: the bar is right-aligned, so it grows leftward and the icon stays under the cursor. */}
+            <input
+              type="range" min="0" max="100" value={volume}
+              onChange={e => set(Number(e.target.value))}
+            />
+            <button className={`nf ${icon}`} onClick={() => audio.setMute(!device.isMuted)}></button>
+            <span>{volume}%</span>
+          </div>
+        );
+      }
 
       function App() {
         const [output, setOutput] = useState(providers.outputMap);
@@ -126,7 +165,12 @@
         return (
           <div className="app">
             <div className="left">
-              <i className="logo nf nf-fa-windows"></i>
+              {/* Like Omarchy's logo: opens the winarchy menu (same as Super+Alt+Space). */}
+              <button
+                className="logo nf nf-fa-windows"
+                title="winarchy menu (Super+Alt+Space)"
+                onClick={() => run(WINARCHY)}
+              ></button>
               {output.glazewm && (
                 <div className="workspaces">
                   {output.glazewm.currentWorkspaces.map(workspace => (
@@ -186,6 +230,10 @@
                     }
                   ></button>
                 </>
+              )}
+
+              {output.audio?.defaultPlaybackDevice && (
+                <Volume audio={output.audio} />
               )}
 
               {output.network && (
