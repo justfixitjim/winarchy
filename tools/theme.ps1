@@ -8,7 +8,8 @@
 #
 # Targets: glazewm (window borders), bar (Zebar), menu (winarchy menu), windows (dark or light
 # mode and accent colour), wallpaper (your own pictures in ~\.glzr\winarchy\backgrounds\<id>,
-# then ones drawn from the theme's colours), terminal (Windows Terminal colour scheme), vscode (colour theme,
+# then ones drawn from the theme's colours), firefox (browser toolbars, tabs and new tab page,
+# through userChrome.css; takes effect when Firefox restarts), terminal (Windows Terminal colour scheme), vscode (colour theme,
 # installing its extension if needed). Pick with -Only or -Skip, or set "themeSkip" in
 # ~\.glzr\winarchy\settings.json, for example "themeSkip": ["vscode"].
 param(
@@ -255,8 +256,47 @@ function Get-Backgrounds($id, $theme) {
     return $list
 }
 
+# --- Firefox: chrome\winarchy.css, imported from userChrome.css / userContent.css -----------
+function Get-FirefoxProfiles {
+    $base = Join-Path $env:APPDATA 'Mozilla\Firefox'
+    $ini = Join-Path $base 'profiles.ini'
+    if (-not (Test-Path $ini)) { return @() }
+    $profiles = @(); $path = $null; $rel = $true
+    foreach ($line in (Get-Content $ini) + '[end]') {
+        if ($line -match '^\[') {
+            if ($path) { $profiles += $(if ($rel) { Join-Path $base ($path -replace '/', '\') } else { $path }) }
+            $path = $null; $rel = $true
+        }
+        elseif ($line -match '^Path=(.+)$') { $path = $Matches[1] }
+        elseif ($line -match '^IsRelative=0') { $rel = $false }
+    }
+    # Only profiles that have been used (others are leftovers and background-task profiles).
+    return @($profiles | Where-Object { (Test-Path (Join-Path $_ 'prefs.js')) -and $_ -notmatch 'MozillaBackgroundTask' })
+}
+
+$ffPref = 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true); // winarchy'
+
+function Add-FirstLine($file, $line) {
+    $text = if (Test-Path $file) { Read-Text $file } else { '' }
+    if ($text -notmatch [regex]::Escape($line)) { Write-Text $file ($line + "`n" + $text) }
+}
+function Remove-WinarchyLines($file) {
+    if (-not (Test-Path $file)) { return }
+    $rest = @((Read-Text $file) -split "`r?`n" | Where-Object { $_ -notmatch '/[/*] winarchy' })
+    if (-not ($rest -join '').Trim()) { Remove-Item $file } else { Write-Text $file (($rest -join "`n").TrimEnd() + "`n") }
+}
+
 if ($Restore) {
-    if (-not (Test-Path $backupPath)) { Log 'Nothing to restore (no theme was ever applied).'; return }
+    foreach ($prof in Get-FirefoxProfiles) {
+        $chrome = Join-Path $prof 'chrome'
+        Remove-WinarchyLines (Join-Path $chrome 'userChrome.css')
+        Remove-WinarchyLines (Join-Path $chrome 'userContent.css')
+        Remove-Item (Join-Path $chrome 'winarchy.css'), (Join-Path $chrome 'winarchy-content.css') -ErrorAction SilentlyContinue
+        Remove-WinarchyLines (Join-Path $prof 'user.js')
+        if ((Test-Path $chrome) -and -not (Get-ChildItem $chrome)) { Remove-Item $chrome }
+    }
+
+    if (-not (Test-Path $backupPath)) { Log 'Firefox restored; nothing else to restore.'; return }
     $b = Read-Text $backupPath | ConvertFrom-Json
     foreach ($r in $b.Registry) {
         if ($r.Kind -eq 'None') { Remove-ItemProperty -Path $r.Path -Name $r.Name -ErrorAction SilentlyContinue; continue }
@@ -277,7 +317,7 @@ if ($Restore) {
         }
     }
     Remove-Item $backupPath
-    Log 'Restored the Windows, Terminal and VS Code settings from before winarchy themes.'
+    Log 'Restored the Windows, wallpaper, Terminal, VS Code and Firefox settings from before winarchy themes.'
     return
 }
 
@@ -399,6 +439,49 @@ Try-Target 'wallpaper' {
     $bgs = @(Get-Backgrounds $pick.Id $t)
     Set-Wallpaper $bgs[0]
     Log "  wallpaper: $(Split-Path $bgs[0] -Leaf) (1 of $($bgs.Count); menu > Appearance > Next background)"
+}
+
+Try-Target 'firefox' {
+    $profiles = @(Get-FirefoxProfiles)
+    if (-not $profiles) { Log '  firefox: not installed, skipped'; return }
+    $tc = $t.terminal
+    $v = [ordered]@{
+        '--toolbox-bgcolor' = $c.surface; '--toolbox-bgcolor-inactive' = $c.surface; '--toolbox-textcolor' = $c.foreground
+        '--lwt-accent-color' = $c.surface; '--lwt-accent-color-inactive' = $c.surface; '--lwt-text-color' = $c.foreground
+        '--toolbar-bgcolor' = $c.background; '--toolbar-color' = $c.foreground
+        '--toolbar-field-background-color' = $c.surface; '--toolbar-field-color' = $c.foreground; '--toolbar-field-border-color' = $c.border_inactive
+        '--toolbar-field-focus-background-color' = $c.surface; '--toolbar-field-focus-color' = $c.foreground; '--toolbar-field-focus-border-color' = $c.accent
+        '--lwt-toolbar-field-highlight' = $c.selection; '--lwt-toolbar-field-highlight-text' = $c.foreground
+        '--tab-selected-bgcolor' = $c.background; '--tab-selected-textcolor' = $c.foreground
+        '--tab-loading-fill' = $c.accent; '--tab-line-color' = $c.accent; '--lwt-tab-line-color' = $c.accent
+        '--toolbarbutton-icon-fill' = $c.foreground; '--toolbarbutton-icon-fill-attention' = $c.accent
+        '--arrowpanel-background' = $c.background; '--arrowpanel-color' = $c.foreground; '--arrowpanel-border-color' = $c.border_inactive
+        '--panel-separator-color' = $c.border_inactive; '--chrome-content-separator-color' = $c.border_inactive
+        '--sidebar-background-color' = $c.surface; '--sidebar-text-color' = $c.foreground; '--sidebar-border-color' = $c.border_inactive
+        '--urlbarView-highlight-background' = $c.selection; '--urlbarView-highlight-color' = $c.foreground
+        '--focus-outline-color' = $c.accent; '--color-accent-primary' = $c.accent; '--button-primary-bgcolor' = $c.accent
+    }
+    $decl = ($v.GetEnumerator() | ForEach-Object { "  $($_.Key): $($_.Value) !important;" }) -join "`n"
+    $chromeCss = "/* winarchy theme: $($pick.Id). Written by winarchy's theme.ps1 - change themes instead of editing. */`n" +
+        ":root, :root:-moz-lwtheme {`n$decl`n}`n#navigator-toolbox { background-color: $($c.surface) !important; }`n"
+    $contentCss = "/* winarchy theme: $($pick.Id). Written by winarchy's theme.ps1. */`n" +
+        "@-moz-document url(`"about:newtab`"), url(`"about:home`"), url(`"about:privatebrowsing`") {`n" +
+        "  :root, body {`n    --newtab-background-color: $($c.background) !important;`n    --newtab-background-color-secondary: $($c.surface) !important;`n" +
+        "    --newtab-text-primary-color: $($c.foreground) !important;`n    --newtab-primary-action-background: $($c.accent) !important;`n" +
+        "    background-color: $($c.background) !important;`n    color: $($c.foreground) !important;`n  }`n}`n"
+    foreach ($prof in $profiles) {
+        $chrome = Join-Path $prof 'chrome'
+        New-Item -ItemType Directory -Force -Path $chrome | Out-Null
+        Write-Text (Join-Path $chrome 'winarchy.css') $chromeCss
+        Write-Text (Join-Path $chrome 'winarchy-content.css') $contentCss
+        Add-FirstLine (Join-Path $chrome 'userChrome.css') '@import url("winarchy.css"); /* winarchy */'
+        Add-FirstLine (Join-Path $chrome 'userContent.css') '@import url("winarchy-content.css"); /* winarchy */'
+        $userJs = Join-Path $prof 'user.js'
+        $js = if (Test-Path $userJs) { Read-Text $userJs } else { '' }
+        if ($js -notmatch [regex]::Escape($ffPref)) { Write-Text $userJs ($js.TrimEnd() + $(if ($js.Trim()) { "`n" } else { '' }) + $ffPref + "`n") }
+    }
+    $running = [bool](Get-Process firefox -ErrorAction SilentlyContinue)
+    Log "  firefox: $($profiles.Count) profile(s)$(if ($running) { ' - restart Firefox to see it' })"
 }
 
 Try-Target 'terminal' {

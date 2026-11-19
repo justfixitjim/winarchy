@@ -56,8 +56,9 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 ## 2. Automatic theming of everything (including third-party apps)
 
 > **Status: mostly built (Nov 2026).**
-> - Done: 8 themes (`themes/*.json`), `tools/theme.ps1` (set, next, list, restore), Super+Ctrl+Shift+Space picker and Appearance → Theme / Next theme. Targets: GlazeWM borders, Zebar bar, winarchy menu, Windows dark/light and accent, wallpaper, Windows Terminal, VS Code. Wallpapers: the user's own per theme (`backgrounds\<id>`), then three generated from the palette (glow, bands, dot grid), cycled with Next background. Previous settings are backed up on first use and restored on uninstall.
-> - Still open: Obsidian, Firefox / Chromium, a live preview in the picker, and following Windows' light/dark schedule.
+> - Done: 8 themes (`themes/*.json`), `tools/theme.ps1` (set, next, list, restore), Super+Ctrl+Shift+Space picker and Appearance → Theme / Next theme. Targets: GlazeWM borders, Zebar bar, winarchy menu, Windows dark/light and accent, wallpaper, Windows Terminal, VS Code, Firefox (userChrome.css / userContent.css imports in every used profile, plus the stylesheet pref in user.js). Wallpapers: the user's own per theme (`backgrounds\<id>`), then three generated from the palette (glow, bands, dot grid), cycled with Next background. Previous settings are backed up on first use and restored on uninstall.
+> - Left out by choice: Obsidian (vaults keep their own community themes).
+> - Still open: Chromium browsers, a live preview in the picker, and following Windows' light/dark schedule.
 
 ### What Omarchy does
 
