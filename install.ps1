@@ -35,7 +35,10 @@ param(
     # Also install PowerToys (winarchy's own launcher replaces its Command Palette).
     [switch]$WithPowerToys,
     # Skip the media tools' dependencies (ffmpeg, ImageMagick).
-    [switch]$NoMediaTools
+    [switch]$NoMediaTools,
+    # Windows VPN connection for the bar's VPN button (default: the first one found).
+    # Pass -VpnName none to hide the button.
+    [string]$VpnName
 )
 
 $ErrorActionPreference = 'Stop'
@@ -223,7 +226,22 @@ $unit = 'F'; if ($Celsius) { $unit = 'C' }
 # HTML exactly matches the one whitelisted in zpack.json, so both get the same string.
 $winarchyPath = (Join-Path $dest 'winarchy.exe').Replace('\', '/')
 $barHtml = Join-Path $pack 'bar.html'
-Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")))
+# VPN button: the PC's own VPN connection (Settings > Network > VPN), never a hard-coded name.
+if (-not $VpnName) {
+    $vpn = @(Get-VpnConnection -ErrorAction SilentlyContinue) + @(Get-VpnConnection -AllUserConnection -ErrorAction SilentlyContinue) |
+        Where-Object { $_ } | Select-Object -First 1
+    if ($vpn) { $VpnName = $vpn.Name }
+}
+if ($VpnName -eq 'none') { $VpnName = '' }
+# Which phonebook holds it: per-user first, then all-user (Windows' sign-in dialog needs it).
+$vpnPbk = ''
+foreach ($pbk in "$env:APPDATA\Microsoft\Network\Connections\Pbk\rasphone.pbk",
+                 "$env:ProgramData\Microsoft\Network\Connections\Pbk\rasphone.pbk") {
+    if ($VpnName -and (Test-Path $pbk) -and (Select-String -Path $pbk -SimpleMatch "[$VpnName]" -Quiet)) { $vpnPbk = $pbk; break }
+}
+Note $(if ($VpnName) { "VPN button: $VpnName" } else { 'VPN button: hidden (no Windows VPN connection found)' })
+$jsVpn = $VpnName.Replace('\', '\\').Replace("'", "\'")
+Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
 $zpack = Join-Path $pack 'zpack.json'
 Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')))
 Note "temperature in degrees $unit"

@@ -36,6 +36,7 @@ Re-run it any time to upgrade. Options:
 - `-SkipApps` skips winget.
 - `-Celsius` shows the bar's temperature in Celsius (the default is Fahrenheit).
 - `-NoDictation` skips Handy.
+- `-VpnName <name>` picks which Windows VPN connection the bar's VPN button controls (default: the first one found; `none` hides it).
 - `-WithPowerToys` also installs PowerToys. winarchy doesn't need it, but its other tools (Peek, Always on top, ZoomIt) are handy.
 
 ## Keys
@@ -106,6 +107,11 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
 - **Workspace numbers** switch workspaces when clicked.
+- **VPN** (shown if the PC has a Windows VPN connection in Settings > Network > VPN):
+  - Green **VPN on** / grey **VPN off**.
+  - Click to disconnect.
+  - Click to connect: it uses Windows' own dialer and your saved sign-in. If the connection is set to prompt, Windows' sign-in window opens with your details filled in, and Enter connects.
+  - To connect with no window at all, untick "Prompt for name and password" in that window's Properties > Options.
 - **Volume:**
   - Scroll over it to change the volume.
   - Hover to reveal a slider.

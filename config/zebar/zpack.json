@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
   "name": "winarchy",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "winarchy top bar: GlazeWM workspaces, clock, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
   "tags": [
     "topbar",
@@ -35,6 +35,18 @@
           {
             "program": "explorer.exe",
             "argsRegex": "^ms-settings:sound$"
+          },
+          {
+            "program": "rasdial.exe",
+            "argsRegex": ".*"
+          },
+          {
+            "program": "rasdial.exe",
+            "argsRegex": ""
+          },
+          {
+            "program": "rasphone.exe",
+            "argsRegex": ".*"
           }
         ]
       },

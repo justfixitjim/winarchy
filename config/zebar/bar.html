@@ -33,6 +33,12 @@
       // shellCommands privilege in zpack.json exactly).
       const WINARCHY = '{{WINARCHY_EXE}}';
 
+      // Windows VPN connection to toggle from the bar (empty = no VPN button).
+      // install.ps1 fills this in with the first VPN found in Settings > Network > VPN.
+      const VPN_NAME = '{{VPN_NAME}}';
+      // Phonebook that holds it (all-user or per-user), for Windows' sign-in dialog.
+      const VPN_PBK = '{{VPN_PBK}}';
+
       // Runs an allowed program without waiting for it to exit.
       function run(program, args) {
         zebar.shellSpawn(program, args).catch(err => console.error(err));
@@ -77,6 +83,74 @@
             <button className={`nf ${icon}`} onClick={() => audio.setMute(!device.isMuted)}></button>
             <span>{volume}%</span>
           </div>
+        );
+      }
+
+      // VPN: shows whether the Windows VPN connection is up; click to connect or disconnect
+      // (uses the saved credentials, through Windows' own rasdial).
+      function Vpn() {
+        const [state, setState] = useState('unknown'); // connected | disconnected | busy | error
+        const [detail, setDetail] = useState('');
+
+        async function refresh() {
+          try {
+            const out = await zebar.shellExec('rasdial.exe');
+            const up = out.stdout.split(/\r?\n/).some(l => l.trim().toLowerCase() === VPN_NAME.toLowerCase());
+            setState(s => (s === 'busy' ? s : up ? 'connected' : 'disconnected'));
+          } catch (err) {
+            setState('error');
+            setDetail(String(err));
+          }
+        }
+
+        useEffect(() => {
+          refresh();
+          const timer = setInterval(refresh, 5000);
+          return () => clearInterval(timer);
+        }, []);
+
+        async function toggle() {
+          if (state === 'connected') {
+            setState('busy');
+            setDetail('Disconnecting...');
+            try { await zebar.shellExec('rasdial.exe', [VPN_NAME, '/disconnect']); } catch (err) { setDetail(String(err)); }
+            setState('disconnected');
+            setTimeout(refresh, 1000);
+            return;
+          }
+          // Connect through Windows' own dialer: it uses the sign-in details saved with the
+          // connection (rasdial can't read those, and failed tries can lock work accounts).
+          // It connects straight away if the connection doesn't prompt; otherwise its
+          // sign-in window opens with your details filled in, and Enter connects.
+          setState('busy');
+          setDetail('Connecting...');
+          zebar.shellSpawn('rasphone.exe', VPN_PBK ? ['-f', VPN_PBK, '-d', VPN_NAME] : ['-d', VPN_NAME]).catch(err => setDetail(String(err)));
+          for (let i = 0; i < 60; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            const out = await zebar.shellExec('rasdial.exe').catch(() => null);
+            if (out && out.stdout.split(/\r?\n/).some(l => l.trim().toLowerCase() === VPN_NAME.toLowerCase())) {
+              setDetail('');
+              setState('connected');
+              return;
+            }
+          }
+          setDetail('');
+          setState('disconnected');
+        }
+
+        const icon = state === 'connected' ? 'nf-md-shield_lock'
+          : state === 'busy' ? 'nf-md-shield_sync_outline'
+          : state === 'error' ? 'nf-md-shield_alert_outline'
+          : 'nf-md-shield_off_outline';
+        const label = state === 'connected' ? 'VPN on' : state === 'busy' ? 'VPN...' : 'VPN off';
+        return (
+          <button
+            className={`vpn ${state}`}
+            title={`${VPN_NAME}: ${state}${detail ? ' - ' + detail : ''}\nClick to ${state === 'connected' ? 'disconnect' : 'connect'}`}
+            onClick={() => state !== 'busy' && toggle()}
+          >
+            <i className={`nf ${icon}`}></i> {label}
+          </button>
         );
       }
 
@@ -231,6 +305,8 @@
                   ></button>
                 </>
               )}
+
+              {VPN_NAME && <Vpn />}
 
               {output.audio?.defaultPlaybackDevice && (
                 <Volume audio={output.audio} />

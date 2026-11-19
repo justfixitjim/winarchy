@@ -101,6 +101,7 @@ body,
 }
 
 .logo,
+.vpn,
 .volume,
 .binding-mode,
 .tiling-direction,
@@ -213,4 +214,20 @@ body,
     width: 90px;
     opacity: 1;
   }
+}
+
+/* winarchy: VPN toggle. */
+.vpn {
+  background: none;
+  border: none;
+  color: rgb(255 255 255 / 55%);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+
+  &.connected { color: rgb(158 206 106); }
+  &.busy { color: rgb(224 175 104); }
+  &.error { color: rgb(247 118 142); }
+  &:hover { color: rgb(122 162 247); }
 }
