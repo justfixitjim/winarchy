@@ -23,7 +23,7 @@
         useEffect,
       } from 'https://esm.sh/react@18?dev';
       import { createRoot } from 'https://esm.sh/react-dom@18/client?dev';
-      import * as zebar from 'https://esm.sh/zebar@3.0';
+      import * as zebar from 'https://esm.sh/zebar@3.3.1';
 
       // Temperature unit for the weather readout: 'F' (Fahrenheit) or 'C' (Celsius).
       // winarchy's install.ps1 sets this; pass -Celsius to it for Celsius.
@@ -53,7 +53,47 @@
         memory: { type: 'memory' },
         weather: { type: 'weather' },
         audio: { type: 'audio' },
+        systray: { type: 'systray' },
       });
+
+      // System tray: the taskbar is hidden, so tray-only apps show here instead.
+      // Collapsed to a count by default; clicks go to each app as they would on the
+      // taskbar, so right-click opens the app's own menu (with Quit) to close it.
+      function Tray({ systray }) {
+        const [open, setOpen] = useState(() => {
+          try { return localStorage.getItem('winarchy.trayOpen') === '1'; } catch { return false; }
+        });
+        function toggle() {
+          setOpen(o => {
+            try { localStorage.setItem('winarchy.trayOpen', o ? '0' : '1'); } catch {}
+            return !o;
+          });
+        }
+        const icons = systray.icons || [];
+        if (!icons.length) return null;
+        return (
+          <div className={`tray ${open ? 'open' : ''}`}>
+            {open && icons.map(icon => (
+              <img
+                key={icon.id}
+                className="tray-icon"
+                src={icon.iconUrl}
+                title={`${icon.tooltip || ''}\nRight-click for its menu (Quit, Exit)`}
+                onClick={() => systray.onLeftClick(icon.id)}
+                onDoubleClick={() => systray.onLeftDoubleClick(icon.id)}
+                onContextMenu={e => { e.preventDefault(); systray.onRightClick(icon.id); }}
+                onAuxClick={e => e.button === 1 && systray.onMiddleClick(icon.id)}
+                onMouseEnter={() => systray.onHoverEnter(icon.id)}
+                onMouseLeave={() => systray.onHoverLeave(icon.id)}
+              />
+            ))}
+            <button className="tray-toggle" title={open ? 'Hide tray icons' : 'Show tray icons'} onClick={toggle}>
+              <i className={`nf ${open ? 'nf-md-chevron_right' : 'nf-md-chevron_left'}`}></i>
+              {!open && <span> {icons.length}</span>}
+            </button>
+          </div>
+        );
+      }
 
       createRoot(document.getElementById('root')).render(<App />);
 
@@ -305,6 +345,8 @@
                   ></button>
                 </>
               )}
+
+              {output.systray && <Tray systray={output.systray} />}
 
               {VPN_NAME && <Vpn />}
 

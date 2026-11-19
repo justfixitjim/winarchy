@@ -231,3 +231,40 @@ body,
   &.error { color: rgb(247 118 142); }
   &:hover { color: rgb(122 162 247); }
 }
+
+/* winarchy: collapsible system tray. */
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+}
+
+.tray-icon {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  border-radius: 3px;
+
+  &:hover { background: rgb(255 255 255 / 15%); }
+}
+
+.tray-toggle {
+  background: none;
+  border: none;
+  color: rgb(255 255 255 / 55%);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover { color: rgb(122 162 247); }
+}
+
+/* Keep bar items on one line when the tray is expanded. */
+.tray,
+.vpn,
+.volume {
+  white-space: nowrap;
+  flex-shrink: 0;
+}

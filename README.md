@@ -107,6 +107,9 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
 - **Workspace numbers** switch workspaces when clicked.
+- **System tray** (replaces the hidden taskbar's tray): a `‹ 20`-style count; click it to show the tray icons.
+  - Left-click or double-click an icon as you would on the taskbar.
+  - Right-click opens the app's own menu; use its Quit or Exit to close a background app.
 - **VPN** (shown if the PC has a Windows VPN connection in Settings > Network > VPN):
   - Green **VPN on** / grey **VPN off**.
   - Click to disconnect.

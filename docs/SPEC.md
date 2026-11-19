@@ -134,6 +134,10 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 
 ## 4. System tray in the bar (see and close background apps)
 
+> **Status: partly built (Nov 2026).**
+> - Done: the collapsible tray (count when collapsed, remembered between restarts), with left, double, right and middle clicks and hover passed to each app. Right-click → the app's Quit closes it.
+> - Still open: the hover × / force-close, hidden icons, and tray apps in menu search. Zebar's systray output (3.3.1) gives only `id`, `tooltip` and the icon image, with no owner window or process, so closing from the bar needs the tooltip-matching approach below.
+
 ### Why
 
 winarchy hides the taskbar, which also hides the notification area. Apps that live only in the tray (chat clients, sync tools, updaters, Handy itself) become invisible, and the only way to close them is Task Manager. Omarchy's Waybar shows a tray module for the same reason.
