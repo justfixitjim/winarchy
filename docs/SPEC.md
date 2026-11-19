@@ -1,6 +1,6 @@
 # winarchy: features to emulate from Omarchy
 
-Planned features, not built yet. The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
+Planned features (section 1 is built; the rest are not). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
 
 Omarchy references are to [basecamp/omarchy](https://github.com/basecamp/omarchy) (`quattro` branch, November 2026).
 
@@ -132,8 +132,44 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 
 ---
 
+## 4. System tray in the bar (see and close background apps)
+
+### Why
+
+winarchy hides the taskbar, which also hides the notification area. Apps that live only in the tray (chat clients, sync tools, updaters, Handy itself) become invisible, and the only way to close them is Task Manager. Omarchy's Waybar shows a tray module for the same reason.
+
+### What it should do
+
+- **A collapsible tray in the Zebar bar,** next to the VPN and volume controls.
+  - Collapsed (the default): one chevron icon with a count, for example `‹ 7`.
+  - Expanded: the tray icons in a row, each with its tooltip on hover. Clicking the chevron again, or clicking elsewhere, collapses it.
+  - Remember the expanded or collapsed state between restarts.
+- **Per icon:**
+  - Left click: the app's own left-click action (usually opens its window).
+  - Right click: the app's own tray menu, which usually has Quit or Exit. This is the cleanest way to close an app, because the app shuts itself down properly.
+  - Middle click, or a small × shown on hover: **close the app.** First ask it to close (WM_CLOSE to its windows, as Task Manager's "End task" does), then offer to force it after a few seconds if it's still running. Never force-close without that second confirmation.
+- **Hidden icons:** a list in settings (by app name) of icons that should never show, such as ones that are always running and never need attention.
+- **Search:** the winarchy menu also lists tray apps under Search, with "Close" as an action, so Super+Space → type the name → close works without the mouse.
+
+### How
+
+- **Icons:** Zebar 3.3 already has a `systray` provider. It gives each icon an id, tooltip and image, plus `onLeftClick`, `onRightClick`, `onMiddleClick` and hover handlers that forward to the app. That covers showing the icons and the app's own click actions and menu.
+- **Closing:** the provider doesn't close apps, so the bar calls `winarchy.exe tray-close <id>`. That needs the process behind the icon:
+  - Zebar knows each icon's owner window internally (`window_handle`). If its output exposes that, or the id is derived from it, `GetWindowThreadProcessId` gives the process.
+  - If not, match the icon's tooltip and image against running processes (window titles, file description, product name), and fall back to a small picker when more than one matches.
+  - Add `winarchy.exe` to the pack's `shellCommands` with an argsRegex limited to `^tray-close \S+$`.
+- **Collapsing:** pure bar state in `bar.html`; no new privileges.
+
+**Open questions:**
+- Does Zebar's systray output give the owner window or process? Check the provider's output on this PC before choosing between the two closing approaches above.
+- Close the whole app, or only that tray icon's process? Some apps run several processes; the safe default is the process that owns the icon, and its children.
+- Should middle click close straight away (with the force step still confirmed), or always show a confirm first?
+
+---
+
 ## Suggested order
 
 1. ~~**Media utilities.**~~ Built.
-2. **Theming.** The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
-3. **AI usage panel and switching.** It depends on undocumented usage endpoints, so expect upkeep when they change.
+2. **System tray in the bar.** Small, and it fixes a real gap that hiding the taskbar created.
+3. **Theming.** The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
+4. **AI usage panel and switching.** It depends on undocumented usage endpoints, so expect upkeep when they change.
