@@ -101,12 +101,34 @@
                 "run": "ms-screenclip:"
               },
               {
-                "label": "Screen recording",
-                "hint": "Snipping Tool",
+                "label": "Screen recording (start / stop)",
+                "run": "powershell.exe",
+                "args": "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\record.ps1\"",
+                "hint": "this monitor"
+              },
+              {
+                "label": "Text (OCR)",
+                "run": "powershell.exe",
+                "args": "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\capture-text.ps1\"",
+                "hint": "copies text"
+              },
+              {
+                "label": "QR code",
+                "run": "powershell.exe",
+                "args": "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\capture-qr.ps1\"",
+                "hint": "copies contents"
+              },
+              {
+                "label": "Snipping Tool",
                 "run": "explorer.exe",
                 "args": "shell:AppsFolder\\Microsoft.ScreenSketch_8wekyb3d8bbwe!App"
               }
             ]
+          },
+          {
+            "label": "Transcode",
+            "hint": "picture or video",
+            "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\transcode.ps1\" } catch { Write-Host $_ -ForegroundColor Red; Read-Host 'Press Enter to close' }; exit"
           },
           {
             "label": "Clipboard settings",
@@ -161,6 +183,11 @@
               {
                 "label": "VPN",
                 "run": "ms-settings:network-vpn"
+              },
+              {
+                "label": "Share Wi-Fi as QR code",
+                "run": "powershell.exe",
+                "args": "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\wifi-qr.ps1\""
               }
             ]
           },

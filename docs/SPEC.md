@@ -8,6 +8,10 @@ Omarchy references are to [basecamp/omarchy](https://github.com/basecamp/omarchy
 
 ## 1. Media utilities in the menu (transcode, convert, capture)
 
+> **Status: built (Nov 2026).**
+> - Done: transcode (pictures and videos), screen recording, text (OCR), read QR, and share Wi-Fi as QR. See the README's Media tools section.
+> - Still open: screen recording with audio or webcam, ASCII art, the Explorer right-click entry, and a hotkey for recording.
+
 ### What Omarchy does
 
 Small, menu-driven utilities, each a script that pops a picker and runs a CLI tool:
@@ -130,6 +134,6 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 
 ## Suggested order
 
-1. **Media utilities.** Mostly ffmpeg and ImageMagick wrappers, so quick wins.
+1. ~~**Media utilities.**~~ Built.
 2. **Theming.** The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
 3. **AI usage panel and switching.** It depends on undocumented usage endpoints, so expect upkeep when they change.

@@ -22,7 +22,7 @@ irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | i
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
-1. Installs GlazeWM, Zebar, Windows Terminal and Handy with winget, skipping any already installed.
+1. Installs GlazeWM, Zebar, Windows Terminal, Handy, ffmpeg and ImageMagick with winget, skipping any already installed.
 2. Builds `winarchy.exe` and `winarchy-daemon.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
@@ -88,6 +88,20 @@ Arrow keys and Enter browse the menu. Start typing anywhere and it searches ever
 
 Type maths such as `=12*7` or `15%*80` and Enter copies the result. File search isn't included; Explorer (Super+Shift+F) does that.
 
+## Media tools
+
+Omarchy's little utilities, built on ffmpeg, ImageMagick, ZXing.Net and Windows' own OCR. Everything runs on your PC.
+
+| Menu item | What it does |
+|---|---|
+| **Trigger › Transcode** | Pick a picture or video, then a format and size; the result is saved next to the original and shown in Explorer. Pictures can become jpg, png, webp or avif at original, 2560, 1920 or 1280 px (it also reads HEIC). Videos can become mp4 at original, 4K, 1080p or 720p, a gif at 720, 480 or 360 px wide, or mp3 audio. |
+| **Trigger › Capture › Screen recording** | Starts recording the monitor under the mouse; pick it again to stop. Saves an mp4 to Videos\Screen recordings, using the GPU encoder when there is one. There's no audio yet. |
+| **Trigger › Capture › Text (OCR)** | Snip a region and its text is copied to the clipboard. |
+| **Trigger › Capture › QR code** | Snip a QR code and its contents are copied to the clipboard. |
+| **Setup › Network › Share Wi-Fi as QR code** | Shows the current Wi-Fi network as a QR code that phones scan to join. |
+
+The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips them). It downloads ZXing.Net 0.16.9 (Apache-2.0) from NuGet and checks it against a pinned hash. The scripts live in `~\.glzr\winarchy\tools`.
+
 ## Top bar
 
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
@@ -146,7 +160,7 @@ This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replace
 
 ## Roadmap
 
-Planned Omarchy features (media tools, automatic theming, an AI usage panel) are specced in [docs/SPEC.md](docs/SPEC.md).
+Planned Omarchy features (automatic theming, an AI usage panel) are specced in [docs/SPEC.md](docs/SPEC.md).
 
 ## License
 

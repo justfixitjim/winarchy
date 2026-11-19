@@ -33,7 +33,9 @@ param(
     # Don't install Handy (local dictation: hold Right Ctrl to talk).
     [switch]$NoDictation,
     # Also install PowerToys (winarchy's own launcher replaces its Command Palette).
-    [switch]$WithPowerToys
+    [switch]$WithPowerToys,
+    # Skip the media tools' dependencies (ffmpeg, ImageMagick).
+    [switch]$NoMediaTools
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,6 +89,12 @@ if (-not $SkipApps) {
         @{ Id = 'glzr-io.zebar';             Name = 'Zebar';            Present = { Test-Path $zebarExe } },
         @{ Id = 'Microsoft.WindowsTerminal'; Name = 'Windows Terminal'; Present = { Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe" } }
     )
+    if (-not $NoMediaTools) {
+        $apps += @{ Id = 'Gyan.FFmpeg'; Name = 'ffmpeg (media tools)'; Present = {
+            [bool](Get-Command ffmpeg -ErrorAction SilentlyContinue) -or [bool](Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Gyan.FFmpeg*\*\bin\ffmpeg.exe" -ErrorAction SilentlyContinue) } }
+        $apps += @{ Id = 'ImageMagick.ImageMagick'; Name = 'ImageMagick (media tools)'; Present = {
+            [bool](Get-ChildItem "$env:ProgramFiles\ImageMagick-*\magick.exe" -ErrorAction SilentlyContinue) } }
+    }
     if ($WithPowerToys) {
         $apps += @{ Id = 'Microsoft.PowerToys'; Name = 'PowerToys'; Present = { [bool](Get-AppxPackage -Name 'Microsoft.CommandPalette' -ErrorAction SilentlyContinue) } }
     }
@@ -125,6 +133,27 @@ if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
 & $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
 Copy-Item "$here\README.md" $dest -Force
+
+# Media tools (Trigger > Transcode / Capture, Setup > Network > Wi-Fi QR).
+$toolsDir = Join-Path $dest 'tools'
+New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+Copy-Item "$here\tools\*.ps1" $toolsDir -Force
+# ZXing.Net (Apache-2.0) reads and writes QR codes. Pinned version, checked by hash.
+$zxing = Join-Path $toolsDir 'zxing.dll'
+if (-not (Test-Path $zxing)) {
+    $nupkg = Join-Path $env:TEMP 'winarchy-zxing.0.16.9.nupkg'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest 'https://www.nuget.org/api/v2/package/ZXing.Net/0.16.9' -OutFile $nupkg -UseBasicParsing
+    if ((Get-FileHash $nupkg -Algorithm SHA256).Hash -ne '00254ACAAEA069262E6B103D23F1A934E953D503EA43AFE2965272718388F32E') {
+        Remove-Item $nupkg; throw 'ZXing.Net download failed its checksum.'
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($nupkg)
+    try { $entry = $zip.Entries | Where-Object FullName -eq 'lib/net48/zxing.dll'
+          [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $zxing, $true) }
+    finally { $zip.Dispose(); Remove-Item $nupkg }
+    Note 'downloaded ZXing.Net 0.16.9 (QR codes)'
+}
 
 # Files from the pre-release layout.
 foreach ($old in 'winarchy-menu.exe', 'winarchy-autotile.exe', 'build.ps1', 'src') {
