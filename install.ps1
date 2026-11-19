@@ -241,7 +241,7 @@ foreach ($pbk in "$env:APPDATA\Microsoft\Network\Connections\Pbk\rasphone.pbk",
 }
 Note $(if ($VpnName) { "VPN button: $VpnName" } else { 'VPN button: hidden (no Windows VPN connection found)' })
 $jsVpn = $VpnName.Replace('\', '\\').Replace("'", "\'")
-Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
+Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
 $zpack = Join-Path $pack 'zpack.json'
 Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')))
 Note "temperature in degrees $unit"

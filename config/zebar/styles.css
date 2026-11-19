@@ -75,6 +75,7 @@ body,
 }
 
 .logo,
+.agents,
 .vpn,
 .volume,
 .binding-mode,
@@ -241,4 +242,27 @@ body,
 .volume {
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* winarchy: AI usage. */
+.agents {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+
+  i { margin-right: 0; }
+  sup { font-size: 8px; margin-left: 1px; }
+  .low { color: var(--wa-green); }
+  .mid { color: var(--wa-yellow); }
+  .high { color: var(--wa-red); }
+  .unknown { color: color-mix(in srgb, var(--wa-fg) 55%, transparent); }
+  &:hover i { color: var(--wa-accent); }
 }

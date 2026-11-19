@@ -1,6 +1,6 @@
 # winarchy: features to emulate from Omarchy
 
-Planned features (sections 1 and 4 are built, 2 mostly; 3 is not). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
+Planned features (sections 1, 3 and 4 are built, 2 mostly). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
 
 Omarchy references are to [basecamp/omarchy](https://github.com/basecamp/omarchy) (`quattro` branch, November 2026).
 
@@ -102,6 +102,12 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 
 ## 3. AI agent usage panel and account auto-switching
 
+> **Status: built (Nov 2026).** `tools/agents.ps1` (usage, status, add, use, list, remove, mode), the bar readout with a hover summary, and menu → AI.
+> - Claude: usage from `https://api.anthropic.com/api/oauth/usage` with each account's Claude Code sign-in; an expired sign-in is refreshed by running `claude auth status` in that account's folder. Switching "seats" the account's sign-in in `~\.claude` (Omarchy's approach), so running sessions follow.
+> - Codex: usage from `codex app-server` (`account/rateLimits/read`; .NET's stdin BOM needs a blank first line). Extra accounts get their own `CODEX_HOME` with sessions, prompts and settings linked to `~\.codex`; switching sets `CODEX_HOME` for new terminals.
+> - Auto mode switches new sessions at the threshold to the account with the most headroom; manual mode notifies once.
+> - Still open: a richer hover panel than a tooltip, more providers, and a picker for which account to switch to (today it's "next").
+
 ### What Omarchy does
 
 - **An agents panel in the bar.** Hovering an agent shows its usage against the rolling **5-hour** and **weekly** limits.
@@ -181,4 +187,4 @@ winarchy hides the taskbar, which also hides the notification area. Apps that li
 1. ~~**Media utilities.**~~ Built.
 2. ~~**System tray in the bar.**~~ Shipped.
 3. ~~**Theming.**~~ Mostly built (a few apps left). The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
-4. **AI usage panel and switching.** It depends on undocumented usage endpoints, so expect upkeep when they change.
+4. ~~**AI usage panel and switching.**~~ Built. It depends on undocumented usage endpoints, so expect upkeep when they change.

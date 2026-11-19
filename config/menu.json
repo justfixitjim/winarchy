@@ -9,6 +9,84 @@
         "items": []
       },
       {
+        "label": "AI",
+        "id": "ai",
+        "hint": "usage and accounts",
+        "items": [
+          {
+            "label": "Usage",
+            "hint": "every account",
+            "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" status } catch { Write-Host $_ -ForegroundColor Red }; Read-Host 'Press Enter to close'; exit"
+          },
+          {
+            "label": "Claude Code",
+            "items": [
+              {
+                "label": "Switch account",
+                "hint": "next account",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" use claude next"
+              },
+              {
+                "label": "Add account",
+                "hint": "sign in",
+                "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" add claude } catch { Write-Host $_ -ForegroundColor Red }; exit"
+              },
+              {
+                "label": "Accounts",
+                "hint": "list / remove",
+                "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" list claude; $id = Read-Host 'Account id to remove (Enter to keep all)'; if ($id) { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" remove claude $id } } catch { Write-Host $_ -ForegroundColor Red }; Read-Host 'Press Enter to close'; exit"
+              },
+              {
+                "label": "Auto-switch at 90%",
+                "hint": "most headroom",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" mode claude auto 90"
+              },
+              {
+                "label": "Alert only at 90%",
+                "hint": "switch yourself",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" mode claude manual 90"
+              }
+            ]
+          },
+          {
+            "label": "Codex",
+            "items": [
+              {
+                "label": "Switch account",
+                "hint": "next account",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" use codex next"
+              },
+              {
+                "label": "Add account",
+                "hint": "sign in",
+                "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" add codex } catch { Write-Host $_ -ForegroundColor Red }; exit"
+              },
+              {
+                "label": "Accounts",
+                "hint": "list / remove",
+                "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" list codex; $id = Read-Host 'Account id to remove (Enter to keep all)'; if ($id) { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" remove codex $id } } catch { Write-Host $_ -ForegroundColor Red }; Read-Host 'Press Enter to close'; exit"
+              },
+              {
+                "label": "Auto-switch at 90%",
+                "hint": "most headroom",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" mode codex auto 90"
+              },
+              {
+                "label": "Alert only at 90%",
+                "hint": "switch yourself",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" mode codex manual 90"
+              }
+            ]
+          }
+        ]
+      },
+      {
         "label": "Appearance",
         "items": [
           {

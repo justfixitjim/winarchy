@@ -107,6 +107,7 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 ## Top bar
 
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
+- **AI usage** (Claude Code, Codex): see [AI usage and accounts](#ai-usage-and-accounts).
 - **Workspace numbers** switch workspaces when clicked.
 - **System tray** (replaces the hidden taskbar's tray): a `‹ 20`-style count; click it to show the tray icons.
   - Left-click or double-click an icon as you would on the taskbar.
@@ -121,6 +122,17 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
   - Hover to reveal a slider.
   - Click the speaker to mute or unmute.
   - Right-click for Windows sound settings.
+
+## AI usage and accounts
+
+Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`C 42%  X 7%`, green, amber, then red near the limit). Hover for every account and when each limit resets; click for menu → AI.
+
+- **Several accounts:** menu → AI → Claude Code (or Codex) → **Add account** opens a sign-in window. Sign in with the other account; the bar then shows both.
+- **Switch account** moves the next account in. For Claude Code, winarchy swaps which sign-in `~\.claude` holds, so new and running `claude` sessions follow. For Codex, new terminals get that account (through `CODEX_HOME`); history, prompts and settings are shared between accounts.
+- **Auto-switch at 90%:** when the active account passes 90% of a limit, new sessions move to the account with the most headroom, with a notification. **Alert only** (the default) just notifies.
+- Usage is checked every few minutes, the way Claude Code's `/usage` and Codex itself read it. Sign-ins stay in their own folders and never leave the PC.
+- The Claude **desktop app** keeps its own sign-in and isn't switched, but its usage still shows, because limits belong to the account.
+- From a terminal: `~\.glzr\winarchy\tools\agents.ps1 status` (also `add`, `use`, `list`, `remove`, `mode`).
 
 ## Themes
 

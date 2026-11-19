@@ -72,6 +72,17 @@ if (Test-Path $zebarSettings) {
 $pack = Join-Path $zebarDir 'winarchy'
 if (Test-Path $pack) { Remove-Item $pack -Recurse -Force }
 
+$agentsScript = Join-Path $dest 'tools\agents.ps1'
+$agentsState = Join-Path $env:LOCALAPPDATA 'winarchy\agents'
+if ((Test-Path $agentsScript) -and (Test-Path $agentsState)) {
+    # Put the main Claude and Codex accounts back in ~\.claude and ~\.codex; extra accounts' sign-ins are removed.
+    Step 'Switching Claude Code and Codex back to their main accounts'
+    foreach ($p in 'claude', 'codex') {
+        if (Test-Path (Join-Path $agentsState "$p.json")) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $agentsScript use $p main }
+    }
+}
+if ([Environment]::GetEnvironmentVariable('CODEX_HOME', 'User') -like "$agentsState*") { [Environment]::SetEnvironmentVariable('CODEX_HOME', $null, 'User') }
+
 $themeScript = Join-Path $dest 'tools\theme.ps1'
 if (Test-Path $themeScript) {
     Step 'Restoring Windows colours, Terminal and VS Code settings from before winarchy themes'

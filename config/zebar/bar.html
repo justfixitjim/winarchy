@@ -39,6 +39,9 @@
       // Phonebook that holds it (all-user or per-user), for Windows' sign-in dialog.
       const VPN_PBK = '{{VPN_PBK}}';
 
+      // winarchy's AI usage script (Claude Code and Codex accounts). install.ps1 fills in the path.
+      const AGENTS = '{{AGENTS_PS1}}';
+
       // Runs an allowed program without waiting for it to exit.
       function run(program, args) {
         zebar.shellSpawn(program, args).catch(err => console.error(err));
@@ -194,6 +197,63 @@
         );
       }
 
+      // AI usage: the active account's share of its 5-hour / weekly limits per agent, coloured
+      // by headroom. Hover for every account; click for the AI menu (accounts and switching).
+      function Agents() {
+        const [data, setData] = useState(null);
+
+        async function refresh() {
+          try {
+            const out = await zebar.shellExec('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', AGENTS, 'usage']);
+            const text = out.stdout.trim();
+            if (text) setData(JSON.parse(text));
+          } catch (err) {
+            console.error(err);
+          }
+        }
+
+        useEffect(() => {
+          refresh();
+          const timer = setInterval(refresh, 60000);
+          return () => clearInterval(timer);
+        }, []);
+
+        const providers = (data?.providers || []).filter(p => p.accounts?.some(a => a.status === 'ok' || a.session || a.weekly));
+        if (!providers.length) return null;
+
+        const when = iso => {
+          if (!iso) return '';
+          const d = new Date(iso);
+          const soon = d - Date.now() < 20 * 3600 * 1000;
+          return soon ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+            : d.toLocaleDateString([], { weekday: 'short', hour: 'numeric' });
+        };
+        const win = (w, name) => w ? `${name} ${Math.round(w.pct)}%${w.resetsAt ? ` (resets ${when(w.resetsAt)})` : ''}` : '';
+        const tip = providers.map(p =>
+          `${p.name} - ${p.mode === 'auto' ? `auto-switch at ${p.threshold}%` : `alert at ${p.threshold}%`}\n` +
+          p.accounts.map(a => `${a.active ? '> ' : '   '}${a.label}${a.plan ? ` (${a.plan})` : ''}: ` +
+            ([win(a.session, '5h'), win(a.weekly, 'week')].filter(Boolean).join(', ') || a.status) +
+            (a.stale ? ' [old]' : '') + (a.status !== 'ok' && (a.session || a.weekly) ? ` - ${a.status}` : '')).join('\n')
+        ).join('\n\n') + '\n\nClick for accounts and switching';
+
+        return (
+          <button className="agents" title={tip} onClick={() => run(WINARCHY, ['ai'])}>
+            <i className="nf nf-md-robot_outline"></i>
+            {providers.map(p => {
+              const a = p.accounts.find(x => x.active) || p.accounts[0];
+              const peak = a.peak;
+              const level = peak == null ? 'unknown' : peak >= p.threshold ? 'high' : peak >= p.threshold - 20 ? 'mid' : 'low';
+              return (
+                <span key={p.id} className={`agent ${level}`}>
+                  {p.name[0]} {peak == null ? '-' : `${Math.round(peak)}%`}
+                  {p.accounts.length > 1 ? <sup>{p.accounts.indexOf(a) + 1}</sup> : null}
+                </span>
+              );
+            })}
+          </button>
+        );
+      }
+
       function App() {
         const [output, setOutput] = useState(providers.outputMap);
 
@@ -345,6 +405,8 @@
                   ></button>
                 </>
               )}
+
+              <Agents />
 
               {output.systray && <Tray systray={output.systray} />}
 
