@@ -3,50 +3,24 @@
  * Ref https://www.nerdfonts.com/cheat-sheet for a cheatsheet of available Nerdfonts icons.
  */
 @import 'https://www.nerdfonts.com/assets/css/webfont.css';
+/* Colours come from theme.css, which `winarchy theme` rewrites (Tokyo Night by default). */
+@import './theme.css';
 
 :root {
   --text-size: 12px;
   --icon-size: 12px;
-
-  --text-color-light: rgba(0 0 0 / 95%);
-  --text-color-dark: rgba(255 255 255 / 95%);
-
-  --icon-color-light: LightSteelBlue;
-  --icon-color-dark: rgba(115 130 175 / 95%);
-
-  --background-color-light: rgba(238 238 238 / 90%);
-  --background-color-dark: linear-gradient(
-    rgb(0 0 0 / 90%),
-    rgb(5 2 20 / 85%)
-  );
 }
 
-@media (prefers-color-scheme: light) {
-  body {
-    color: var(--text-color-light);
-  }
-
-  i {
-    color: var(--icon-color-light);
-  }
-
-  #root {
-    background: var(--background-color-light);
-  }
+body {
+  color: var(--wa-fg);
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    color: var(--text-color-dark);
-  }
+i {
+  color: color-mix(in srgb, var(--wa-fg) 65%, transparent);
+}
 
-  i {
-    color: var(--icon-color-dark);
-  }
-
-  #root {
-    background: var(--background-color-dark);
-  }
+#root {
+  background: color-mix(in srgb, var(--wa-bg) 92%, transparent);
 }
 
 i {
@@ -74,7 +48,7 @@ body,
 }
 
 #root {
-  border-bottom: 1px solid rgb(255 255 255 / 5%);
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-fg) 6%, transparent);
 }
 
 .app {
@@ -119,29 +93,29 @@ body,
 }
 
 .workspace {
-  background: rgb(255 255 255 / 5%);
+  background: color-mix(in srgb, var(--wa-fg) 6%, transparent);
   margin-right: 4px;
   padding: 4px 8px;
-  color: rgb(255 255 255 / 90%);
+  color: var(--wa-fg);
   border: none;
   border-radius: 2px;
   cursor: pointer;
 
   &.displayed {
-    background: rgb(255 255 255 / 15%);
+    background: color-mix(in srgb, var(--wa-fg) 15%, transparent);
   }
 
   &.focused,
   &:hover {
-    background: rgb(75 115 255 / 50%);
+    background: color-mix(in srgb, var(--wa-accent) 50%, transparent);
   }
 }
 
 .binding-mode,
 .tiling-direction,
 .paused-button {
-  background: rgb(255 255 255 / 15%);
-  color: rgb(255 255 255 / 90%);
+  background: color-mix(in srgb, var(--wa-fg) 15%, transparent);
+  color: var(--wa-fg);
   border-radius: 2px;
   line-height: 1;
   padding: 4px 8px;
@@ -154,7 +128,7 @@ body,
 }
 
 .cpu .high-usage {
-  color: #900029;
+  color: var(--wa-red);
 }
 
 .battery {
@@ -178,7 +152,7 @@ body,
   padding: 0;
 
   &:hover {
-    color: rgb(122 162 247);
+    color: var(--wa-accent);
   }
 }
 
@@ -206,7 +180,7 @@ body,
     opacity: 0;
     margin: 0;
     transition: width 150ms ease, opacity 150ms ease;
-    accent-color: rgb(122 162 247);
+    accent-color: var(--wa-accent);
     cursor: pointer;
   }
 
@@ -220,16 +194,16 @@ body,
 .vpn {
   background: none;
   border: none;
-  color: rgb(255 255 255 / 55%);
+  color: color-mix(in srgb, var(--wa-fg) 55%, transparent);
   font-size: inherit;
   font-family: inherit;
   cursor: pointer;
   padding: 0;
 
-  &.connected { color: rgb(158 206 106); }
-  &.busy { color: rgb(224 175 104); }
-  &.error { color: rgb(247 118 142); }
-  &:hover { color: rgb(122 162 247); }
+  &.connected { color: var(--wa-green); }
+  &.busy { color: var(--wa-yellow); }
+  &.error { color: var(--wa-red); }
+  &:hover { color: var(--wa-accent); }
 }
 
 /* winarchy: collapsible system tray. */
@@ -246,19 +220,19 @@ body,
   cursor: pointer;
   border-radius: 3px;
 
-  &:hover { background: rgb(255 255 255 / 15%); }
+  &:hover { background: color-mix(in srgb, var(--wa-fg) 15%, transparent); }
 }
 
 .tray-toggle {
   background: none;
   border: none;
-  color: rgb(255 255 255 / 55%);
+  color: color-mix(in srgb, var(--wa-fg) 55%, transparent);
   font-size: inherit;
   font-family: inherit;
   cursor: pointer;
   padding: 0;
 
-  &:hover { color: rgb(122 162 247); }
+  &:hover { color: var(--wa-accent); }
 }
 
 /* Keep bar items on one line when the tray is expanded. */

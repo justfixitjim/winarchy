@@ -72,6 +72,12 @@ if (Test-Path $zebarSettings) {
 $pack = Join-Path $zebarDir 'winarchy'
 if (Test-Path $pack) { Remove-Item $pack -Recurse -Force }
 
+$themeScript = Join-Path $dest 'tools\theme.ps1'
+if (Test-Path $themeScript) {
+    Step 'Restoring Windows colours, Terminal and VS Code settings from before winarchy themes'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $themeScript -Restore
+}
+
 Step "Removing $dest"
 if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
 $cache = Join-Path $env:LOCALAPPDATA 'winarchy'

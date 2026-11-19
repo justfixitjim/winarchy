@@ -1,0 +1,325 @@
+# winarchy theme: apply one colour theme to everything at once.
+#
+#   theme.ps1 <id>            apply themes\<id>.json (for example tokyo-night)
+#   theme.ps1 -Next           apply the next theme in the list
+#   theme.ps1 -List           list themes (* marks the current one)
+#   theme.ps1 -Restore        put back the Windows, Terminal and VS Code settings from before the first theme
+#
+# Targets: glazewm (window borders), bar (Zebar), menu (winarchy menu), windows (dark or light
+# mode and accent colour), terminal (Windows Terminal colour scheme), vscode (colour theme,
+# installing its extension if needed). Pick with -Only or -Skip, or set "themeSkip" in
+# ~\.glzr\winarchy\settings.json, for example "themeSkip": ["vscode"].
+param(
+    [Parameter(Position = 0)][string]$Name,
+    [switch]$Next,
+    [switch]$List,
+    [switch]$Restore,
+    [string[]]$Only = @(),
+    [string[]]$Skip = @(),
+    # Write the files but don't restart the bar or reload GlazeWM (used by install.ps1).
+    [switch]$NoReload,
+    # Report failures only in the console, not in a message box.
+    [switch]$NoPopup
+)
+$ErrorActionPreference = 'Stop'
+
+$root = Join-Path $env:USERPROFILE '.glzr\winarchy'
+$themesDir = Join-Path $root 'themes'
+$currentPath = Join-Path $root 'theme.json'
+$stateDir = Join-Path $env:LOCALAPPDATA 'winarchy'
+$backupPath = Join-Path $stateDir 'theme-backup.json'
+$logPath = Join-Path $stateDir 'theme.log'
+$utf8 = New-Object Text.UTF8Encoding $false
+New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+
+function Read-Text($p) { [IO.File]::ReadAllText($p, $utf8) }
+function Write-Text($p, $t) { [IO.File]::WriteAllText($p, $t, $utf8) }
+function Log($msg) {
+    Write-Host $msg
+    Add-Content -Path $logPath -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), $msg) -Encoding UTF8
+}
+
+# JSON with comments and trailing commas (Windows Terminal, VS Code) -> plain JSON.
+function ConvertFrom-Jsonc([string]$text) {
+    $sb = New-Object Text.StringBuilder
+    $i = 0; $n = $text.Length; $inStr = $false
+    while ($i -lt $n) {
+        $c = $text[$i]
+        if ($inStr) {
+            [void]$sb.Append($c)
+            if ($c -eq '\' -and $i + 1 -lt $n) { [void]$sb.Append($text[$i + 1]); $i += 2; continue }
+            if ($c -eq '"') { $inStr = $false }
+            $i++; continue
+        }
+        if ($c -eq '"') { $inStr = $true; [void]$sb.Append($c); $i++; continue }
+        if ($c -eq '/' -and $i + 1 -lt $n -and $text[$i + 1] -eq '/') {
+            while ($i -lt $n -and $text[$i] -ne "`n") { $i++ }
+            continue
+        }
+        if ($c -eq '/' -and $i + 1 -lt $n -and $text[$i + 1] -eq '*') {
+            $end = $text.IndexOf('*/', $i + 2)
+            $i = if ($end -lt 0) { $n } else { $end + 2 }
+            continue
+        }
+        [void]$sb.Append($c); $i++
+    }
+    $plain = [regex]::Replace($sb.ToString(), ',(\s*[\]}])', '$1')
+    if (-not $plain.Trim()) { $plain = '{}' }
+    return $plain | ConvertFrom-Json
+}
+
+# Registry DWORDs come back as Int32 or larger types; Set-ItemProperty wants the Int32 bit pattern.
+function ConvertTo-Dword($v) { [BitConverter]::ToInt32([BitConverter]::GetBytes([uint32]([int64]$v -band 0xFFFFFFFFL)), 0) }
+
+# ConvertTo-Json in PowerShell 5.1 pads with huge indents; re-indent to 4 spaces.
+function Format-Json($obj) {
+    $json = ConvertTo-Json -InputObject $obj -Depth 32
+    $out = New-Object Text.StringBuilder
+    $level = 0; $inStr = $false; $esc = $false
+    foreach ($line in $json -split "`r?`n") {
+        $t = $line.Trim()
+        if (-not $t) { continue }
+        if ($t[0] -eq '}' -or $t[0] -eq ']') { $level-- }
+        [void]$out.Append(('    ' * [Math]::Max($level, 0)) + ($t -replace '^("(?:[^"\\]|\\.)*"):\s+', '$1: ') + "`n")
+        foreach ($ch in $t.ToCharArray()) {
+            if ($esc) { $esc = $false; continue }
+            if ($ch -eq '\') { $esc = $true; continue }
+            if ($ch -eq '"') { $inStr = -not $inStr; continue }
+            if (-not $inStr) { if ($ch -eq '{' -or $ch -eq '[') { $level++ } elseif ($ch -eq '}' -or $ch -eq ']') { $level-- } }
+        }
+        if ($t[0] -eq '}' -or $t[0] -eq ']') { $level++ }
+    }
+    return $out.ToString()
+}
+
+function Set-Prop($obj, $name, $value) {
+    if ($obj.PSObject.Properties[$name]) { $obj.$name = $value }
+    else { $obj | Add-Member -NotePropertyName $name -NotePropertyValue $value }
+}
+
+function Get-Themes {
+    Get-ChildItem $themesDir -Filter *.json | Sort-Object Name | ForEach-Object {
+        $t = Read-Text $_.FullName | ConvertFrom-Json
+        [pscustomobject]@{ Id = $_.BaseName; Name = $t.name; Theme = $t }
+    }
+}
+
+function Get-CurrentId {
+    if (Test-Path $currentPath) { try { return (Read-Text $currentPath | ConvertFrom-Json).id } catch {} }
+    return 'tokyo-night'
+}
+
+# --- Backup (first run only), so -Restore and uninstall can put things back -----------
+$regValues = @(
+    @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize', 'AppsUseLightTheme'),
+    @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize', 'SystemUsesLightTheme'),
+    @('HKCU:\Software\Microsoft\Windows\DWM', 'AccentColor'),
+    @('HKCU:\Software\Microsoft\Windows\DWM', 'ColorizationColor'),
+    @('HKCU:\Software\Microsoft\Windows\DWM', 'ColorizationAfterglow'),
+    @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent', 'AccentColorMenu'),
+    @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent', 'StartColorMenu'),
+    @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent', 'AccentPalette'),
+    @('HKCU:\Control Panel\Desktop', 'AutoColorization')
+)
+$vscodeSettings = Join-Path $env:APPDATA 'Code\User\settings.json'
+$terminalSettings = @(
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json",
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json",
+    "$env:LOCALAPPDATA\Microsoft\Windows Terminal\settings.json"
+) | Where-Object { Test-Path $_ }
+
+function Save-Backup {
+    if (Test-Path $backupPath) { return }
+    $reg = foreach ($rv in $regValues) {
+        $item = Get-ItemProperty -Path $rv[0] -Name $rv[1] -ErrorAction SilentlyContinue
+        $v = if ($item) { $item.($rv[1]) } else { $null }
+        if ($v -is [array]) { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'Binary'; Value = [Convert]::ToBase64String([byte[]]$v) } }  # binary values arrive as object[]
+        elseif ($null -ne $v) { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'DWord'; Value = (ConvertTo-Dword $v) } }
+        else { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'None'; Value = $null } }
+    }
+    $vs = $null
+    if (Test-Path $vscodeSettings) {
+        try { $p = (ConvertFrom-Jsonc (Read-Text $vscodeSettings)).PSObject.Properties['workbench.colorTheme']; if ($p) { $vs = $p.Value } } catch {}
+    }
+    foreach ($ts in $terminalSettings) { if (-not (Test-Path "$ts.winarchy-backup")) { Copy-Item $ts "$ts.winarchy-backup" } }
+    Write-Text $backupPath ((@{ Registry = @($reg); VSCodeTheme = $vs } | ConvertTo-Json -Depth 5) + "`n")
+}
+
+Add-Type -Namespace Winarchy -Name Native -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
+'@
+function Send-ColorChange {
+    $r = [UIntPtr]::Zero
+    foreach ($area in 'ImmersiveColorSet', 'WindowsThemeElement') {
+        [void][Winarchy.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, $area, 2, 1000, [ref]$r)
+    }
+}
+
+if ($Restore) {
+    if (-not (Test-Path $backupPath)) { Log 'Nothing to restore (no theme was ever applied).'; return }
+    $b = Read-Text $backupPath | ConvertFrom-Json
+    foreach ($r in $b.Registry) {
+        if ($r.Kind -eq 'None') { Remove-ItemProperty -Path $r.Path -Name $r.Name -ErrorAction SilentlyContinue; continue }
+        if (-not (Test-Path $r.Path)) { New-Item -Path $r.Path -Force | Out-Null }
+        $v = if ($r.Kind -eq 'Binary') { [Convert]::FromBase64String($r.Value) } else { ConvertTo-Dword $r.Value }
+        Set-ItemProperty -Path $r.Path -Name $r.Name -Value $v -Type $r.Kind
+    }
+    Send-ColorChange
+    foreach ($ts in $terminalSettings) { if (Test-Path "$ts.winarchy-backup") { Move-Item "$ts.winarchy-backup" $ts -Force } }
+    if (Test-Path $vscodeSettings) {
+        $vs = ConvertFrom-Jsonc (Read-Text $vscodeSettings)
+        $now = $vs.PSObject.Properties['workbench.colorTheme']
+        if (($now -and $now.Value) -ne $b.VSCodeTheme) {
+            if ($b.VSCodeTheme) { Set-Prop $vs 'workbench.colorTheme' $b.VSCodeTheme } else { $vs.PSObject.Properties.Remove('workbench.colorTheme') }
+            Write-Text $vscodeSettings (Format-Json $vs)
+        }
+    }
+    Remove-Item $backupPath
+    Log 'Restored the Windows, Terminal and VS Code settings from before winarchy themes.'
+    return
+}
+
+$themes = @(Get-Themes)
+if ($List) {
+    $cur = Get-CurrentId
+    foreach ($t in $themes) { '{0} {1,-18} {2}' -f $(if ($t.Id -eq $cur) { '*' } else { ' ' }), $t.Id, $t.Name }
+    return
+}
+if ($Next) {
+    $cur = Get-CurrentId
+    $i = [array]::IndexOf(@($themes.Id), $cur)
+    $Name = $themes[($i + 1) % $themes.Count].Id
+}
+if (-not $Name) { throw 'Give a theme id (theme.ps1 -List shows them), -Next, or -Restore.' }
+$pick = $themes | Where-Object { $_.Id -eq $Name -or $_.Name -eq $Name } | Select-Object -First 1
+if (-not $pick) { throw "No theme called '$Name'. Themes: $($themes.Id -join ', ')" }
+$t = $pick.Theme
+$c = $t.colors
+
+# Targets to apply.
+$settingsPath = Join-Path $root 'settings.json'
+if (Test-Path $settingsPath) {
+    try { $s = Read-Text $settingsPath | ConvertFrom-Json; if ($s.themeSkip) { $Skip += @($s.themeSkip) } } catch {}
+}
+$Skip = @($Skip | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() })
+$Only = @($Only | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() })
+function Want($target) { ($Only.Count -eq 0 -or $Only -contains $target) -and -not ($Skip -contains $target) }
+
+Log "Theme: $($t.name)"
+$errors = @()
+function Try-Target($target, [scriptblock]$block) {
+    if (-not (Want $target)) { return }
+    try { & $block } catch { $script:errors += "${target}: $($_.Exception.Message)"; Log "  ${target}: FAILED - $($_.Exception.Message) [$($_.InvocationInfo.ScriptLineNumber)]" }
+}
+
+# Remember the choice (the winarchy menu reads its colours from here).
+$cur = [ordered]@{ id = $pick.Id; name = $t.name; mode = $t.mode; colors = $c }
+Write-Text $currentPath (($cur | ConvertTo-Json -Depth 5) + "`n")
+if (Want 'menu') { Log '  menu: next time it opens' }
+
+Try-Target 'glazewm' {
+    $cfg = Join-Path $env:USERPROFILE '.glzr\glazewm\config.yaml'
+    if (-not (Test-Path $cfg)) { throw 'GlazeWM config not found' }
+    $y = Read-Text $cfg
+    $pat = "(?s)({0}:\s*\r?\n\s*border:\s*\r?\n\s*enabled:[^\n]*\n\s*color:\s*)'[^']*'"
+    $new = [regex]::Replace($y, ($pat -f 'focused_window'), "`$1'$($c.accent)'")
+    $new = [regex]::Replace($new, ($pat -f 'other_windows'), "`$1'$($c.border_inactive)'")
+    if ($new -ne $y) { Write-Text $cfg $new }
+    if (-not $NoReload -and (Get-Process glazewm -ErrorAction SilentlyContinue)) {
+        & "$env:ProgramFiles\glzr.io\GlazeWM\cli\glazewm.exe" command wm-reload-config | Out-Null
+    }
+    Log '  glazewm: borders'
+}
+
+Try-Target 'bar' {
+    $pack = Join-Path $env:USERPROFILE '.glzr\zebar\winarchy'
+    if (-not (Test-Path $pack)) { throw 'winarchy Zebar pack not found' }
+    $css = ":root {`n" + (@(
+        "  --wa-bg: $($c.background);", "  --wa-fg: $($c.foreground);", "  --wa-muted: $($c.muted);",
+        "  --wa-accent: $($c.accent);", "  --wa-red: $($c.red);", "  --wa-green: $($c.green);", "  --wa-yellow: $($c.yellow);"
+    ) -join "`n") + "`n}`n"
+    Write-Text (Join-Path $pack 'theme.css') $css
+    if (-not $NoReload -and (Get-Process zebar -ErrorAction SilentlyContinue)) {
+        Get-Process zebar | Stop-Process -Force
+        Start-Sleep -Milliseconds 500
+        Start-Process "$env:ProgramFiles\glzr.io\Zebar\zebar.exe"
+    }
+    Log '  bar: colours'
+}
+
+Try-Target 'windows' {
+    Save-Backup
+    $light = [int]($t.mode -eq 'light')
+    $pers = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+    Set-ItemProperty $pers AppsUseLightTheme $light -Type DWord
+    Set-ItemProperty $pers SystemUsesLightTheme $light -Type DWord
+
+    # Accent colour: Windows stores it as ABGR, plus a palette of 8 shades (RGBA).
+    $hex = $c.accent.TrimStart('#')
+    $r = [Convert]::ToInt32($hex.Substring(0, 2), 16); $g = [Convert]::ToInt32($hex.Substring(2, 2), 16); $bl = [Convert]::ToInt32($hex.Substring(4, 2), 16)
+    function Shade($f) {
+        if ($f -ge 0) { @([int]($r + (255 - $r) * $f), [int]($g + (255 - $g) * $f), [int]($bl + (255 - $bl) * $f)) }
+        else { @([int]($r * (1 + $f)), [int]($g * (1 + $f)), [int]($bl * (1 + $f))) }
+    }
+    function Abgr($rgb) { ConvertTo-Dword (0xFF000000L + ($rgb[2] -shl 16) + ($rgb[1] -shl 8) + $rgb[0]) }
+    $shades = @(0.6, 0.4, 0.2, 0, -0.2, -0.4, -0.6, -0.3) | ForEach-Object { , (Shade $_) }
+    $palette = New-Object byte[] 32
+    for ($k = 0; $k -lt 8; $k++) { $palette[$k * 4] = $shades[$k][0]; $palette[$k * 4 + 1] = $shades[$k][1]; $palette[$k * 4 + 2] = $shades[$k][2] }
+    $accentKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'
+    if (-not (Test-Path $accentKey)) { New-Item -Path $accentKey -Force | Out-Null }
+    Set-ItemProperty $accentKey AccentPalette $palette -Type Binary
+    Set-ItemProperty $accentKey AccentColorMenu (Abgr $shades[3]) -Type DWord
+    Set-ItemProperty $accentKey StartColorMenu (Abgr $shades[5]) -Type DWord
+    $argb = ConvertTo-Dword (0xC4000000L + ($r -shl 16) + ($g -shl 8) + $bl)
+    $dwm = 'HKCU:\Software\Microsoft\Windows\DWM'
+    Set-ItemProperty $dwm AccentColor (Abgr $shades[3]) -Type DWord
+    Set-ItemProperty $dwm ColorizationColor $argb -Type DWord
+    Set-ItemProperty $dwm ColorizationAfterglow $argb -Type DWord
+    Set-ItemProperty 'HKCU:\Control Panel\Desktop' AutoColorization 0 -Type DWord  # don't pick the accent from the wallpaper
+    Send-ColorChange
+    Log "  windows: $($t.mode) mode, accent $($c.accent)"
+}
+
+Try-Target 'terminal' {
+    if (-not $terminalSettings) { Log '  terminal: Windows Terminal not found, skipped'; return }
+    Save-Backup
+    $tc = $t.terminal
+    foreach ($ts in $terminalSettings) {
+        $j = ConvertFrom-Jsonc (Read-Text $ts)
+        $scheme = [ordered]@{ name = 'winarchy' }
+        foreach ($p in $tc.PSObject.Properties) { $scheme[$p.Name] = $p.Value }
+        $schemes = @(@($j.schemes) | Where-Object { $_ -and $_.name -ne 'winarchy' }) + @([pscustomobject]$scheme)
+        Set-Prop $j 'schemes' $schemes
+        if (-not $j.profiles) { Set-Prop $j 'profiles' ([pscustomobject]@{ defaults = [pscustomobject]@{}; list = @() }) }
+        if ($j.profiles -is [array]) { throw 'old-style profiles list; set colorScheme to "winarchy" by hand' }
+        if (-not $j.profiles.defaults) { Set-Prop $j.profiles 'defaults' ([pscustomobject]@{}) }
+        Set-Prop $j.profiles.defaults 'colorScheme' 'winarchy'
+        Write-Text $ts (Format-Json $j)
+    }
+    Log '  terminal: colour scheme "winarchy"'
+}
+
+Try-Target 'vscode' {
+    if (-not $t.vscode -or -not $t.vscode.theme) { return }
+    $code = Get-Command code -ErrorAction SilentlyContinue
+    if (-not $code -and -not (Test-Path $vscodeSettings)) { Log '  vscode: not installed, skipped'; return }
+    Save-Backup
+    if ($code -and $t.vscode.extension) {
+        $have = & $code.Source --list-extensions 2>$null
+        if (-not ($have -contains $t.vscode.extension)) {
+            & $code.Source --install-extension $t.vscode.extension 2>&1 | Out-Null
+            Log "  vscode: installed $($t.vscode.extension)"
+        }
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path $vscodeSettings) | Out-Null
+    $vs = if (Test-Path $vscodeSettings) { ConvertFrom-Jsonc (Read-Text $vscodeSettings) } else { [pscustomobject]@{} }
+    Set-Prop $vs 'workbench.colorTheme' $t.vscode.theme
+    Write-Text $vscodeSettings (Format-Json $vs)
+    Log "  vscode: $($t.vscode.theme)"
+}
+
+if ($errors.Count -and -not $NoPopup) {
+    Add-Type -AssemblyName System.Windows.Forms
+    [void][System.Windows.Forms.MessageBox]::Show("Theme $($t.name) applied, except:`n`n$($errors -join "`n")", 'winarchy theme')
+}

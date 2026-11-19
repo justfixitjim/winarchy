@@ -263,6 +263,18 @@ if (Test-Path $zebarSettings) {
 }
 Write-Utf8 $zebarSettings (($zs | ConvertTo-Json -Depth 5) + "`n")
 
+# Colour themes (Super+Ctrl+Shift+Space). Re-apply the current one (Tokyo Night on a new
+# install) to winarchy's own pieces; Windows, Terminal and VS Code change only when you pick one.
+$themesDir = Join-Path $dest 'themes'
+New-Item -ItemType Directory -Force -Path $themesDir | Out-Null
+Copy-Item "$here\themes\*.json" $themesDir -Force
+$themeId = 'tokyo-night'
+$themeJson = Join-Path $dest 'theme.json'
+if (Test-Path $themeJson) { try { $themeId = (Get-Content $themeJson -Raw | ConvertFrom-Json).id } catch {} }
+if (-not (Test-Path (Join-Path $themesDir "$themeId.json"))) { $themeId = 'tokyo-night' }
+Quiet { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $toolsDir 'theme.ps1') $themeId -Only 'glazewm,bar,menu' -NoReload -NoPopup }
+Note "Theme: $themeId"
+
 # --- 7. Dictation: Handy push-to-talk on Right Ctrl ----------------------------------------
 # Handy (https://github.com/cjpais/Handy) is free, open source and transcribes on your PC. It
 # writes settings_store.json during its first-run setup. Once that exists, this puts

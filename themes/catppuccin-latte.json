@@ -1,0 +1,42 @@
+{
+  "name": "Catppuccin Latte",
+  "mode": "light",
+  "colors": {
+    "background": "#eff1f5",
+    "surface": "#e6e9ef",
+    "foreground": "#4c4f69",
+    "muted": "#8c8fa1",
+    "accent": "#1e66f5",
+    "selection": "#ccd0da",
+    "border_inactive": "#bcc0cc",
+    "red": "#d20f39",
+    "green": "#40a02b",
+    "yellow": "#df8e1d"
+  },
+  "terminal": {
+    "black": "#5c5f77",
+    "red": "#d20f39",
+    "green": "#40a02b",
+    "yellow": "#df8e1d",
+    "blue": "#1e66f5",
+    "magenta": "#ea76cb",
+    "cyan": "#179299",
+    "white": "#acb0be",
+    "brightBlack": "#6c6f85",
+    "brightRed": "#d20f39",
+    "brightGreen": "#40a02b",
+    "brightYellow": "#df8e1d",
+    "brightBlue": "#1e66f5",
+    "brightMagenta": "#ea76cb",
+    "brightCyan": "#179299",
+    "brightWhite": "#bcc0cc",
+    "background": "#eff1f5",
+    "foreground": "#4c4f69",
+    "cursorColor": "#4c4f69",
+    "selectionBackground": "#ccd0da"
+  },
+  "vscode": {
+    "theme": "Catppuccin Latte",
+    "extension": "Catppuccin.catppuccin-vsc"
+  }
+}

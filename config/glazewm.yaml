@@ -151,6 +151,9 @@ keybindings:
   # Keybinding cheat sheet
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe keys']
     bindings: ['lwin+k']
+  # Theme picker (colours for borders, bar, menu, Windows, Terminal, VS Code)
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe theme']
+    bindings: ['lwin+ctrl+shift+space']
   # Power menu (lock, sleep, restart, shut down)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe system']
     bindings: ['lwin+escape']

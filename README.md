@@ -46,6 +46,7 @@ Re-run it any time to upgrade. Options:
 | Super+Space or Super+Alt+Space | The menu: browse it, or type to search apps, windows, Settings pages and menu items; `=2+2` for maths |
 | Super+K | Every keybinding, searchable |
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
+| Super+Ctrl+Shift+Space | Pick a colour theme |
 | Super+Enter | Terminal |
 | Super+Shift+B / Super+Shift+Alt+B | Default browser / private window |
 | Super+Shift+F | Explorer |
@@ -120,6 +121,18 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
   - Hover to reveal a slider.
   - Click the speaker to mute or unmute.
   - Right-click for Windows sound settings.
+
+## Themes
+
+Super+Ctrl+Shift+Space (or menu → Appearance → Theme) switches every colour at once, like Omarchy's themes: Tokyo Night (the default), Catppuccin Mocha and Latte, Gruvbox, Everforest, Rosé Pine, Nord and Kanagawa. Appearance → Next theme cycles through them.
+
+A theme changes:
+- **GlazeWM** window borders, the **top bar** and the **winarchy menu**.
+- **Windows:** dark or light mode and the accent colour.
+- **Windows Terminal:** a `winarchy` colour scheme, set as the default.
+- **VS Code:** the matching colour theme, installing its extension if needed.
+
+To leave some out, add them to `~\.glzr\winarchy\settings.json`, for example `"themeSkip": ["vscode", "windows"]`. The first theme you pick saves your previous Windows, Terminal and VS Code settings, and uninstalling puts them back (`tools\theme.ps1 -Restore` does it by hand). Themes are JSON files in `~\.glzr\winarchy\themes`; copy one to make your own.
 
 ## Dictation
 

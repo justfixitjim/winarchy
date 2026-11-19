@@ -70,14 +70,36 @@ static class Native
 
 class MenuForm : Form
 {
-    // Tokyo Night palette (Omarchy's default theme).
-    static readonly Color Bg = ColorTranslator.FromHtml("#1a1b26");
-    static readonly Color InputBg = ColorTranslator.FromHtml("#16161e");
-    static readonly Color Fg = ColorTranslator.FromHtml("#c0caf5");
-    static readonly Color Dim = ColorTranslator.FromHtml("#565f89");
-    static readonly Color Accent = ColorTranslator.FromHtml("#7aa2f7");
-    static readonly Color SelBg = ColorTranslator.FromHtml("#283457");
-    static readonly Color Warn = ColorTranslator.FromHtml("#f7768e");
+    // Colours of the current theme (~\.glzr\winarchy\theme.json, written by tools\theme.ps1),
+    // falling back to Tokyo Night (Omarchy's default).
+    static readonly Color Bg = ThemeColor("background", "#1a1b26");
+    static readonly Color InputBg = ThemeColor("surface", "#16161e");
+    static readonly Color Fg = ThemeColor("foreground", "#c0caf5");
+    static readonly Color Dim = ThemeColor("muted", "#565f89");
+    static readonly Color Accent = ThemeColor("accent", "#7aa2f7");
+    static readonly Color SelBg = ThemeColor("selection", "#283457");
+    static readonly Color Warn = ThemeColor("red", "#f7768e");
+
+    static Dictionary<string, object> themeColors;
+    static Color ThemeColor(string name, string fallback)
+    {
+        if (themeColors == null)
+        {
+            themeColors = new Dictionary<string, object>();
+            try
+            {
+                string p = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "theme.json");
+                var t = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(p));
+                var c = t["colors"] as Dictionary<string, object>;
+                if (c != null) themeColors = c;
+            }
+            catch { }
+        }
+        object v;
+        try { if (themeColors.TryGetValue(name, out v) && v is string) return ColorTranslator.FromHtml((string)v); }
+        catch { }
+        return ColorTranslator.FromHtml(fallback);
+    }
 
     readonly Node root;
     Node current;
@@ -700,6 +722,35 @@ static class Program
                 if (kv.Key.StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase)) continue;
                 n.Items.Add(new Node { Label = kv.Key, Hint = "App", Run = "explorer.exe", Args = "shell:AppsFolder\\" + kv.Value, Key = "app:" + kv.Key, Parent = n });
             }
+        }
+        else if (n.Provider == "themes")
+        {
+            string themes = Path.Combine(Dir, "themes"), current = "";
+            try
+            {
+                var cur = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(Dir, "theme.json")));
+                current = cur["id"] as string ?? "";
+            }
+            catch { current = "tokyo-night"; }
+            string script = Path.Combine(Dir, "tools", "theme.ps1");
+            if (Directory.Exists(themes))
+                foreach (var f in Directory.GetFiles(themes, "*.json").OrderBy(f => f))
+                {
+                    string id = Path.GetFileNameWithoutExtension(f), name = id, mode = "";
+                    try
+                    {
+                        var t = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(f));
+                        name = t["name"] as string ?? id;
+                        mode = t.ContainsKey("mode") ? t["mode"] as string : "";
+                    }
+                    catch { }
+                    n.Items.Add(new Node
+                    {
+                        Label = name, Hint = id == current ? "current" : mode, Key = "theme:" + id, Parent = n,
+                        Run = "powershell.exe",
+                        Args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\" " + id
+                    });
+                }
         }
         else if (n.Provider == "settings")
         {

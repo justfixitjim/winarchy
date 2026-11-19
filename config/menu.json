@@ -1,5 +1,5 @@
 {
-  "_help": "winarchy menu (Super+Space / Super+Alt+Space), laid out like Omarchy's. Each item has a label and ONE of: run (+args), glaze (GlazeWM command), terminal (PowerShell in Windows Terminal), page (an id, or 'keys'), items (a submenu) or provider ('apps' = every installed app, 'settings' = every Windows Settings page). Optional: hint, confirm, id. %ENV% vars are expanded; {dir} = the winarchy folder, {menu} = this file. Typing searches everything: apps, open windows, settings and every item below.",
+  "_help": "winarchy menu (Super+Space / Super+Alt+Space), laid out like Omarchy's. Each item has a label and ONE of: run (+args), glaze (GlazeWM command), terminal (PowerShell in Windows Terminal), page (an id, or 'keys'), items (a submenu) or provider ('apps' = every installed app, 'settings' = every Windows Settings page, 'themes' = the colour themes). Optional: hint, confirm, id. %ENV% vars are expanded; {dir} = the winarchy folder, {menu} = this file. Typing searches everything: apps, open windows, settings and every item below.",
   "root": {
     "label": "winarchy",
     "items": [
@@ -12,7 +12,19 @@
         "label": "Appearance",
         "items": [
           {
-            "label": "Theme & accent colour",
+            "label": "Theme",
+            "id": "theme",
+            "hint": "Super+Ctrl+Shift+Space",
+            "provider": "themes",
+            "items": []
+          },
+          {
+            "label": "Next theme",
+            "run": "powershell.exe",
+            "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\theme.ps1\" -Next"
+          },
+          {
+            "label": "Windows colours",
             "run": "ms-settings:colors"
           },
           {
