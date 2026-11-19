@@ -3,7 +3,7 @@
     Installs winarchy: Omarchy-style, keyboard-driven tiling for Windows 11.
 
 .DESCRIPTION
-    - Installs GlazeWM (+ Zebar bar) and PowerToys (for Command Palette) with winget.
+    - Installs GlazeWM (+ Zebar bar), Windows Terminal and Handy (dictation) with winget.
     - Builds winarchy.exe and winarchy-daemon.exe from source with the C# compiler
       that ships with Windows (nothing prebuilt is downloaded).
     - Writes the GlazeWM config (workspaces laid out for your monitors) and the menu,
@@ -31,7 +31,9 @@ param(
     # Show the bar's temperature in Celsius instead of Fahrenheit.
     [switch]$Celsius,
     # Don't install Handy (local dictation: hold Right Ctrl to talk).
-    [switch]$NoDictation
+    [switch]$NoDictation,
+    # Also install PowerToys (winarchy's own launcher replaces its Command Palette).
+    [switch]$WithPowerToys
 )
 
 $ErrorActionPreference = 'Stop'
@@ -83,9 +85,11 @@ if (-not $SkipApps) {
     $apps = @(
         @{ Id = 'glzr-io.glazewm';           Name = 'GlazeWM';          Present = { Test-Path $glazeExe } },
         @{ Id = 'glzr-io.zebar';             Name = 'Zebar';            Present = { Test-Path $zebarExe } },
-        @{ Id = 'Microsoft.PowerToys';       Name = 'PowerToys';        Present = { [bool](Get-AppxPackage -Name 'Microsoft.CommandPalette' -ErrorAction SilentlyContinue) } },
         @{ Id = 'Microsoft.WindowsTerminal'; Name = 'Windows Terminal'; Present = { Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe" } }
     )
+    if ($WithPowerToys) {
+        $apps += @{ Id = 'Microsoft.PowerToys'; Name = 'PowerToys'; Present = { [bool](Get-AppxPackage -Name 'Microsoft.CommandPalette' -ErrorAction SilentlyContinue) } }
+    }
     if (-not $NoDictation) {
         $apps += @{ Id = 'cjpais.Handy'; Name = 'Handy (dictation)'; Present = { Test-Path "$env:LOCALAPPDATA\Handy\handy.exe" } }
     }
@@ -116,7 +120,7 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $csc)) { throw ".NET Framework C# compiler not found at $csc" }
 $common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
 & $csc @common "/out:$dest\winarchy.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-    /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll "$here\src\winarchy.cs"
+    /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Data.dll "$here\src\winarchy.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
 & $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
@@ -278,7 +282,7 @@ if (Get-Process glazewm -ErrorAction SilentlyContinue) { Note 'GlazeWM is runnin
 
 Write-Host ''
 Write-Host 'winarchy is installed.' -ForegroundColor Green
-Write-Host '  Super+Space      launcher (Command Palette)'
+Write-Host '  Super+Space      launcher: apps, windows, settings, maths'
 Write-Host '  Super+Alt+Space  menu: search and arrow to anything'
 Write-Host '  Super+K          every keybinding'
 Write-Host '  Super+Shift+P    pause tiling if you need to get out of the way'

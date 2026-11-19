@@ -6,7 +6,7 @@
       {
         "label": "Apps",
         "hint": "Super+Space",
-        "run": "x-cmdpal:"
+        "page": "launcher"
       },
       {
         "label": "Learn",
@@ -23,10 +23,6 @@
           {
             "label": "GlazeWM docs",
             "run": "https://github.com/glzr-io/glazewm#readme"
-          },
-          {
-            "label": "Command Palette docs",
-            "run": "https://learn.microsoft.com/windows/powertoys/command-palette/overview"
           },
           {
             "label": "Omarchy manual",
@@ -100,12 +96,6 @@
             "hint": "Zebar",
             "run": "{dir}\\winarchy.exe",
             "args": "launch edit \"%USERPROFILE%\\.glzr\\zebar\""
-          },
-          {
-            "label": "Launcher look",
-            "hint": "PowerToys",
-            "run": "{dir}\\winarchy.exe",
-            "args": "launch app PowerToys Microsoft.PowerToys"
           }
         ]
       },

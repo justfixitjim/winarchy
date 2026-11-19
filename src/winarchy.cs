@@ -3,6 +3,8 @@
 //   winarchy                         open the main menu (menu.json next to the exe)
 //   winarchy <page-id>               open the menu at a page, e.g. "system"
 //   winarchy keys                    searchable cheat sheet built from the GlazeWM config
+//   winarchy launcher                search apps, open windows, Settings pages and the menu,
+//                                    and do quick maths (Super+Space)
 //   winarchy launch browser          new window of the default browser
 //   winarchy launch browser-private  private window of the default browser
 //   winarchy launch editor           VS Code if installed, otherwise Notepad
@@ -16,6 +18,8 @@
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Text;
@@ -31,6 +35,7 @@ using System.Windows.Forms;
 class Node
 {
     public string Id, Label, Hint, Run, Args, Glaze, Terminal, Page, Builtin;
+    public string Key; // launcher: identity for usage history (e.g. "app:Spotify")
     public bool Confirm;
     public List<Node> Items;
     public Node Parent;
@@ -189,7 +194,11 @@ class MenuForm : Form
         string q = input.Text.Trim();
         var result = new List<Row>();
         int order = 0;
-        if (q.Length == 0)
+        if (Program.IsLauncher && current == root)
+        {
+            result = LauncherRows(q);
+        }
+        else if (q.Length == 0)
         {
             foreach (var n in current.Items)
                 result.Add(new Row { Node = n, Text = n.Label, Hint = HintFor(n), Order = order++ });
@@ -216,7 +225,55 @@ class MenuForm : Form
         status.ForeColor = Dim;
         status.Text = keysMode
             ? rows.Count + " keybindings   type to filter   Esc close"
-            : "↑↓ move   Enter select   " + (current != root ? "Backspace back   " : "") + "Esc close";
+            : Program.IsLauncher && current == root
+                ? "apps, windows, settings, menu   =2+2 maths   Enter open   Esc close"
+                : "↑↓ move   Enter select   " + (current != root ? "Backspace back   " : "") + "Esc close";
+    }
+
+    // Launcher view: frequent things first when empty; otherwise everything scored,
+    // nudged by how often you've opened it, with a calculator row for maths.
+    List<Row> LauncherRows(string q)
+    {
+        var result = new List<Row>();
+        int order = 0;
+        var history = Program.History;
+        if (q.Length == 0)
+        {
+            var seen = new HashSet<Node>();
+            var menuNode = root.Items.FirstOrDefault(n => n.IsMenu);
+            if (menuNode != null)
+            {
+                result.Add(new Row { Node = menuNode, Text = menuNode.Label, Hint = HintFor(menuNode), Order = order++ });
+                seen.Add(menuNode);
+            }
+            foreach (var n in root.Items.Where(n => n.Key != null && history.ContainsKey(n.Key))
+                                        .OrderByDescending(n => history[n.Key]).Take(8))
+            {
+                result.Add(new Row { Node = n, Text = n.Label, Hint = HintFor(n), Order = order++ });
+                seen.Add(n);
+            }
+            foreach (var n in root.Items.Where(n => n.Hint == "App" && !seen.Contains(n)))
+                result.Add(new Row { Node = n, Text = n.Label, Hint = HintFor(n), Order = order++ });
+            return result;
+        }
+
+        string math = Program.Calculate(q);
+        if (math != null)
+            result.Add(new Row
+            {
+                Node = new Node { Label = "= " + math, Hint = "Enter copies", Builtin = "copy:" + math, Parent = root },
+                Text = "= " + math, Hint = "Enter copies", Score = int.MaxValue, Order = order++
+            });
+
+        foreach (var pair in Flatten(current, ""))
+        {
+            int sc = Score(q, pair.Value.Label, pair.Key, pair.Value.Hint);
+            if (sc <= 0) continue;
+            int uses;
+            if (pair.Value.Key != null && history.TryGetValue(pair.Value.Key, out uses)) sc += Math.Min(uses, 20) * 15;
+            result.Add(new Row { Node = pair.Value, Text = pair.Key, Hint = HintFor(pair.Value), Score = sc, Order = order++ });
+        }
+        return result.OrderByDescending(r => r.Score).ThenBy(r => r.Order).Take(200).ToList();
     }
 
     static string HintFor(Node n)
@@ -339,6 +396,7 @@ class MenuForm : Form
         if (n.Page != null)
         {
             if (n.Page == "keys") { Program.NextMode = "keys"; Close(); return; }
+            if (n.Page == "launcher") { Program.NextMode = "launcher"; Close(); return; }
             var target = Program.FindById(root, n.Page);
             if (target != null) GoTo(target);
             return;
@@ -353,6 +411,7 @@ class MenuForm : Form
         try
         {
             Hide();
+            if (Program.IsLauncher) Program.RecordUse(n);
             Program.Execute(n);
             Close();
         }
@@ -436,9 +495,15 @@ static class Program
     {
         Node root, start;
         bool keys = mode == "keys";
+        IsLauncher = mode == "launcher";
         try
         {
-            if (keys)
+            if (IsLauncher)
+            {
+                root = BuildLauncher();
+                start = root;
+            }
+            else if (keys)
             {
                 root = LoadKeys();
                 start = root;
@@ -467,6 +532,7 @@ static class Program
         Rectangle wa = Screen.FromPoint(cursor).WorkingArea;
         form.Location = new Point(wa.X + (wa.Width - form.Width) / 2, wa.Y + (int)((wa.Height - form.Height) * 0.38));
         openForm = form;
+        if (IsLauncher) form.Shown += delegate { Launcher.RefreshCacheInBackground(); };
         Application.Run(form);
         openForm = null;
         return true;
@@ -487,6 +553,17 @@ static class Program
     public static void Execute(Node n)
     {
         if (n.Builtin == "none") return;
+        if (n.Builtin != null && n.Builtin.StartsWith("copy:"))
+        {
+            Clipboard.SetText(n.Builtin.Substring(5));
+            return;
+        }
+        if (n.Builtin != null && n.Builtin.StartsWith("focus:"))
+        {
+            var psi = new ProcessStartInfo(GlazeCli, "command focus --container-id " + n.Builtin.Substring(6)) { CreateNoWindow = true, UseShellExecute = false };
+            using (var p = Process.Start(psi)) p.WaitForExit(3000);
+            return;
+        }
         if (n.Builtin == "sleep")
         {
             Application.SetSuspendState(PowerState.Suspend, false, false);
@@ -521,6 +598,143 @@ static class Program
             Process.Start(psi);
         }
     }
+
+    // ── Launcher (Super+Space) ──────────────────────────────────────────
+
+    public static bool IsLauncher;
+
+    static Dictionary<string, int> history;
+    static string HistoryPath { get { return Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\winarchy\history.json"); } }
+
+    public static Dictionary<string, int> History
+    {
+        get
+        {
+            if (history != null) return history;
+            history = new Dictionary<string, int>();
+            try
+            {
+                var raw = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(HistoryPath, Encoding.UTF8)) as Dictionary<string, object>;
+                if (raw != null) foreach (var kv in raw) history[kv.Key] = Convert.ToInt32(kv.Value);
+            }
+            catch { }
+            return history;
+        }
+    }
+
+    public static void RecordUse(Node n)
+    {
+        if (n.Key == null) return;
+        int c;
+        History.TryGetValue(n.Key, out c);
+        History[n.Key] = c + 1;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(HistoryPath));
+            File.WriteAllText(HistoryPath, new JavaScriptSerializer().Serialize(History), Encoding.UTF8);
+        }
+        catch { }
+    }
+
+    // "2+2", "=15% * 80", "(3.5*4)/2" -> result text, or null if it isn't maths.
+    public static string Calculate(string q)
+    {
+        string e = q.StartsWith("=") ? q.Substring(1) : q;
+        e = e.Replace(",", "").Replace(" ", "");
+        if (e.Length == 0 || !Regex.IsMatch(e, @"^[-+*/%().\d]+$")) return null;
+        if (!q.StartsWith("=") && !Regex.IsMatch(e, @"\d[-+*/%]")) return null; // a plain number isn't maths
+        e = Regex.Replace(e, @"(\d+(?:\.\d+)?)%", "($1/100)");                    // 15% -> 0.15
+        try
+        {
+            object v = new DataTable().Compute(e, "");
+            double d = Convert.ToDouble(v, CultureInfo.InvariantCulture);
+            if (double.IsNaN(d) || double.IsInfinity(d)) return null;
+            return d.ToString("G15", CultureInfo.InvariantCulture);
+        }
+        catch { return null; }
+    }
+
+    static Node BuildLauncher()
+    {
+        var root = new Node { Label = "Search", Items = new List<Node>() };
+
+        // The winarchy menu: its items are searchable ("Setup > Audio"), and it opens as a page.
+        try
+        {
+            var menu = LoadMenu();
+            menu.Label = "winarchy menu";
+            menu.Hint = "Super+Alt+Space  \u203a";
+            menu.Parent = root;
+            root.Items.Add(menu);
+        }
+        catch { }
+
+        // Every app in the Start menu's "All apps" list.
+        foreach (var kv in Launcher.Apps().OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            if (kv.Value.StartsWith("http", StringComparison.OrdinalIgnoreCase)) continue;
+            if (kv.Key.StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase)) continue;
+            root.Items.Add(new Node { Label = kv.Key, Hint = "App", Run = "explorer.exe", Args = "shell:AppsFolder\\" + kv.Value, Key = "app:" + kv.Key, Parent = root });
+        }
+
+        // Open windows, from GlazeWM (picking one switches to its workspace).
+        try
+        {
+            var psi = new ProcessStartInfo(GlazeCli, "query windows")
+            {
+                CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8
+            };
+            using (var p = Process.Start(psi))
+            {
+                string json = p.StandardOutput.ReadToEnd();
+                p.WaitForExit(2000);
+                var top = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(json) as Dictionary<string, object>;
+                var data = top["data"] as Dictionary<string, object>;
+                foreach (var o in (object[])data["windows"])
+                {
+                    var w = (Dictionary<string, object>)o;
+                    string title = w["title"] as string, proc = w["processName"] as string;
+                    if (string.IsNullOrEmpty(title) || proc == "winarchy") continue;
+                    root.Items.Add(new Node { Label = title, Hint = "Window \u00b7 " + proc, Builtin = "focus:" + w["id"], Key = "win:" + proc, Parent = root });
+                }
+            }
+        }
+        catch { }
+
+        // Settings pages and classic admin tools.
+        foreach (var st in SettingsPages)
+            root.Items.Add(new Node { Label = st[0], Hint = "Setting", Run = st[1], Args = st.Length > 2 ? st[2] : null, Key = "set:" + st[0], Parent = root });
+        return root;
+    }
+
+    static readonly string[][] SettingsPages =
+    {
+        new[] { "Display", "ms-settings:display" }, new[] { "Sound", "ms-settings:sound" },
+        new[] { "Bluetooth & devices", "ms-settings:bluetooth" }, new[] { "Wi-Fi", "ms-settings:network-wifi" },
+        new[] { "Network status", "ms-settings:network-status" }, new[] { "Ethernet", "ms-settings:network-ethernet" },
+        new[] { "VPN", "ms-settings:network-vpn" }, new[] { "Power & battery", "ms-settings:powersleep" },
+        new[] { "Storage", "ms-settings:storagesense" }, new[] { "Notifications", "ms-settings:notifications" },
+        new[] { "Night light", "ms-settings:nightlight" }, new[] { "Colors / dark mode", "ms-settings:colors" },
+        new[] { "Background / wallpaper", "ms-settings:personalization-background" }, new[] { "Themes", "ms-settings:themes" },
+        new[] { "Lock screen", "ms-settings:lockscreen" }, new[] { "Taskbar", "ms-settings:taskbar" },
+        new[] { "Fonts", "ms-settings:fonts" }, new[] { "Installed apps", "ms-settings:appsfeatures" },
+        new[] { "Default apps", "ms-settings:defaultapps" }, new[] { "Startup apps", "ms-settings:startupapps" },
+        new[] { "Your account", "ms-settings:yourinfo" }, new[] { "Sign-in options", "ms-settings:signinoptions" },
+        new[] { "Date & time", "ms-settings:dateandtime" }, new[] { "Language & region", "ms-settings:regionlanguage" },
+        new[] { "Keyboard", "ms-settings:keyboard" }, new[] { "Mouse", "ms-settings:mousetouchpad" },
+        new[] { "Printers & scanners", "ms-settings:printers" }, new[] { "Game Mode", "ms-settings:gaming-gamemode" },
+        new[] { "Privacy & security", "ms-settings:privacy" }, new[] { "Microphone access", "ms-settings:privacy-microphone" },
+        new[] { "Camera access", "ms-settings:privacy-webcam" }, new[] { "Windows Update", "ms-settings:windowsupdate" },
+        new[] { "Windows Security", "windowsdefender:" }, new[] { "Recovery", "ms-settings:recovery" },
+        new[] { "About this PC", "ms-settings:about" }, new[] { "Multitasking / Snap", "ms-settings:multitasking" },
+        new[] { "Clipboard", "ms-settings:clipboard" }, new[] { "Graphics", "ms-settings:display-advancedgraphics" },
+        new[] { "Remote Desktop", "ms-settings:remotedesktop" }, new[] { "Optional features", "ms-settings:optionalfeatures" },
+        new[] { "Animation effects", "ms-settings:easeofaccess-visualeffects" },
+        new[] { "Control Panel", "control.exe" }, new[] { "Device Manager", "devmgmt.msc" },
+        new[] { "Disk Management", "diskmgmt.msc" }, new[] { "Services", "services.msc" },
+        new[] { "Event Viewer", "eventvwr.msc" }, new[] { "Sound control panel", "mmsys.cpl" },
+        new[] { "Environment variables", "rundll32.exe", "sysdm.cpl,EditEnvironmentVariables" },
+    };
 
     static string Expand(string v)
     {
@@ -769,7 +983,7 @@ static class Launcher
     }
 
     // Everything in the Start menu's "All apps" list: Win32 and Store apps alike.
-    static Dictionary<string, string> ScanApps()
+    public static Dictionary<string, string> ScanApps()
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
@@ -787,7 +1001,7 @@ static class Launcher
         return map;
     }
 
-    static Dictionary<string, string> LoadCache()
+    public static Dictionary<string, string> LoadCache()
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
@@ -799,7 +1013,7 @@ static class Launcher
         return map;
     }
 
-    static void SaveCache(Dictionary<string, string> map)
+    public static void SaveCache(Dictionary<string, string> map)
     {
         try
         {
@@ -807,6 +1021,22 @@ static class Launcher
             File.WriteAllText(CachePath, new JavaScriptSerializer().Serialize(map), Encoding.UTF8);
         }
         catch { }
+    }
+
+    // Cached app list (instant); scans the Start menu only if there's no cache yet.
+    public static Dictionary<string, string> Apps()
+    {
+        var apps = LoadCache();
+        if (apps.Count == 0) { apps = ScanApps(); SaveCache(apps); }
+        return apps;
+    }
+
+    // Rescans the Start menu after the launcher opens, so new apps show up next time.
+    public static void RefreshCacheInBackground()
+    {
+        var t = new Thread(() => { var fresh = ScanApps(); if (fresh.Count > 0) SaveCache(fresh); }) { IsBackground = true };
+        t.SetApartmentState(ApartmentState.STA);
+        t.Start();
     }
 
     static Node InstallOffer(string name, string wingetId)

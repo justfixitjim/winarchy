@@ -8,7 +8,7 @@ It's a thin layer over good existing tools:
 |---|---|
 | Hyprland tiling | [GlazeWM](https://github.com/glzr-io/glazewm), with a helper that adds Hyprland-style automatic splits |
 | Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, volume, stats, weather in °F); the Windows taskbar is hidden |
-| Walker (Super+Space) | PowerToys [Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview) |
+| Walker (Super+Space) | `winarchy launcher`: one search box for apps, open windows, Settings pages, the winarchy menu and quick maths |
 | Omarchy menu (Super+Alt+Space) | `winarchy` menu: a searchable, arrow-key menu for system, setup, install and power actions |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
 | Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
@@ -23,7 +23,7 @@ irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | i
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
-1. Installs GlazeWM, Zebar, PowerToys, Windows Terminal and Handy with winget, skipping any already installed.
+1. Installs GlazeWM, Zebar, Windows Terminal and Handy with winget, skipping any already installed.
 2. Builds `winarchy.exe` and `winarchy-daemon.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
@@ -37,12 +37,13 @@ Re-run it any time to upgrade. Options:
 - `-SkipApps` skips winget.
 - `-Celsius` shows the bar's temperature in Celsius (the default is Fahrenheit).
 - `-NoDictation` skips Handy.
+- `-WithPowerToys` also installs PowerToys. winarchy doesn't need it, but its other tools (Peek, Always on top, ZoomIt) are handy.
 
 ## Keys
 
 | Keys | Action |
 |---|---|
-| Super+Space | Launcher (apps, files, settings, winget, window switcher, calculator) |
+| Super+Space | Launcher: apps, open windows, Settings pages, the menu; type `=2+2` or `15%*80` for maths |
 | Super+Alt+Space | winarchy menu |
 | Super+K | Every keybinding, searchable |
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
@@ -63,6 +64,18 @@ Re-run it any time to upgrade. Options:
 | Super+Ctrl+R | Reload config |
 
 Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, Win+R, Win+I and Win+N. Like Omarchy, tapping Super on its own does nothing; Ctrl+Esc still opens Start.
+
+## Launcher
+
+Super+Space opens one search box (Omarchy's Walker) over:
+
+- **Apps:** everything in the Start menu's All apps list. Ones you open often rise to the top.
+- **Open windows:** pick one to jump to it, switching workspace if needed.
+- **Settings:** Windows Settings pages plus classic tools such as Device Manager and Services.
+- **The winarchy menu:** its items are searchable too, for example "bluetooth" or "restart".
+- **Maths:** type `=` or an expression such as `12*7` or `15%*80`. Enter copies the result.
+
+It doesn't search files; Explorer (Super+Shift+F) does that.
 
 ## Top bar
 

@@ -142,8 +142,8 @@ keybindings:
     bindings: ['lwin+shift+t']
 
   # ── Menus ─────────────────────────────────────────────────────────────
-  # Launcher (Command Palette)
-  - commands: ['shell-exec x-cmdpal:']
+  # Launcher: apps, windows, settings, menu, maths
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe launcher']
     bindings: ['lwin+space']
   # Omarchy-style menu (search + arrow keys)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe']
