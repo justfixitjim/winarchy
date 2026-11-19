@@ -125,7 +125,7 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 
 ## AI usage and accounts
 
-Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`C 42%  X 7%`, green, amber, then red near the limit). Hover for every account and when each limit resets; click for menu → AI.
+Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`C 42%  X 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, the auto-switch toggle, and Add account.
 
 - **Several accounts:** menu → AI → Claude Code (or Codex) → **Add account** opens a sign-in window. Sign in with the other account; the bar then shows both.
 - **Switch account** moves the next account in. For Claude Code, winarchy swaps which sign-in `~\.claude` holds, so new and running `claude` sessions follow. For Codex, new terminals get that account (through `CODEX_HOME`); history, prompts and settings are shared between accounts.

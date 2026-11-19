@@ -1,0 +1,131 @@
+/* winarchy AI panel. Colours come from theme.css (rewritten by `winarchy theme`). */
+@import 'https://www.nerdfonts.com/assets/css/webfont.css';
+@import './theme.css';
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--wa-fg);
+  user-select: none;
+}
+
+.panel {
+  box-sizing: border-box;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: var(--wa-bg);
+  border: 1px solid var(--wa-accent);
+}
+
+.panel-head,
+.provider,
+.account-head,
+.limit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title { font-size: 13px; color: var(--wa-accent); }
+
+section { margin-top: 12px; }
+
+.provider {
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-fg) 15%, transparent);
+  font-weight: bold;
+}
+
+.account {
+  padding: 8px;
+  margin-bottom: 6px;
+  background: color-mix(in srgb, var(--wa-fg) 5%, transparent);
+  border-left: 2px solid transparent;
+
+  &.active { border-left-color: var(--wa-accent); }
+}
+
+.label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  i { color: var(--wa-accent); margin-right: 5px; }
+}
+
+.plan { color: var(--wa-muted); }
+
+.limit { margin-top: 6px; }
+.limit-head { color: color-mix(in srgb, var(--wa-fg) 75%, transparent); }
+
+.track {
+  position: relative;
+  height: 6px;
+  margin-top: 3px;
+  background: color-mix(in srgb, var(--wa-fg) 12%, transparent);
+}
+
+.fill {
+  height: 100%;
+  &.low { background: var(--wa-green); }
+  &.mid { background: var(--wa-yellow); }
+  &.high { background: var(--wa-red); }
+}
+
+/* The switching threshold. */
+.mark {
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 10px;
+  background: var(--wa-fg);
+  opacity: 0.5;
+}
+
+.reset { margin-top: 2px; color: var(--wa-muted); font-size: 11px; }
+.note { margin-top: 6px; color: var(--wa-yellow); font-size: 11px; }
+.busy { margin-top: 10px; color: var(--wa-accent); }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.link:hover,
+.add:hover { color: var(--wa-accent); }
+
+.switch {
+  padding: 2px 6px;
+  font-weight: normal;
+  font-size: 11px;
+  border: 1px solid color-mix(in srgb, var(--wa-fg) 25%, transparent);
+
+  &.on { border-color: var(--wa-green); color: var(--wa-green); }
+  &:hover { border-color: var(--wa-accent); }
+}
+
+.use {
+  padding: 1px 8px;
+  background: var(--wa-accent);
+  color: var(--wa-bg);
+
+  &:hover { opacity: 0.85; }
+}
+
+.add {
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--wa-fg) 65%, transparent);
+}

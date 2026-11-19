@@ -102,11 +102,11 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 
 ## 3. AI agent usage panel and account auto-switching
 
-> **Status: built (Nov 2026).** `tools/agents.ps1` (usage, status, add, use, list, remove, mode), the bar readout with a hover summary, and menu → AI.
+> **Status: built (Nov 2026).** `tools/agents.ps1` (usage, status, add, use, list, remove, mode), the bar readout with a hover summary, the AI panel (a second Zebar widget, `agents.html`: usage bars, reset countdowns, Use per account, auto-switch toggle, Add account; closes when it loses focus), and menu → AI.
 > - Claude: usage from `https://api.anthropic.com/api/oauth/usage` with each account's Claude Code sign-in; an expired sign-in is refreshed by running `claude auth status` in that account's folder. Switching "seats" the account's sign-in in `~\.claude` (Omarchy's approach), so running sessions follow.
 > - Codex: usage from `codex app-server` (`account/rateLimits/read`; .NET's stdin BOM needs a blank first line). Extra accounts get their own `CODEX_HOME` with sessions, prompts and settings linked to `~\.codex`; switching sets `CODEX_HOME` for new terminals.
 > - Auto mode switches new sessions at the threshold to the account with the most headroom; manual mode notifies once.
-> - Still open: a richer hover panel than a tooltip, more providers, and a picker for which account to switch to (today it's "next").
+> - Still open: more providers.
 
 ### What Omarchy does
 

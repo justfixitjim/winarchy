@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
   "name": "winarchy",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "winarchy top bar: GlazeWM workspaces, clock, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
   "tags": [
     "topbar",
@@ -64,6 +64,49 @@
           "height": "40px",
           "monitorSelection": {
             "type": "all"
+          },
+          "dockToEdge": {
+            "enabled": false,
+            "edge": null,
+            "windowMargin": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "agents",
+      "htmlPath": "./agents.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": true,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": [
+        "*.html",
+        "*.css"
+      ],
+      "caching": {
+        "defaultDuration": 604800,
+        "rules": []
+      },
+      "privileges": {
+        "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": ".*agents\\.ps1 (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex))$"
+          }
+        ]
+      },
+      "presets": [
+        {
+          "name": "panel",
+          "anchor": "top_right",
+          "offsetX": "-12px",
+          "offsetY": "44px",
+          "width": "380px",
+          "height": "560px",
+          "monitorSelection": {
+            "type": "primary"
           },
           "dockToEdge": {
             "enabled": false,

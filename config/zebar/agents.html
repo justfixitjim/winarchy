@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy AI panel: opened from the bar's AI usage readout. Colours come from theme.css. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+    <script
+      src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"
+      integrity="sha256-aS0B0wnsaDByLfE16h4MDCP1fQFccysd1YWOcV+gbBo="
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+      import React, { useState, useEffect } from 'https://esm.sh/react@18?dev';
+      import { createRoot } from 'https://esm.sh/react-dom@18/client?dev';
+      import * as zebar from 'https://esm.sh/zebar@3.3.1';
+
+      // winarchy's AI usage script. install.ps1 fills in the path.
+      const AGENTS = '{{AGENTS_PS1}}';
+      const PS = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', AGENTS];
+
+      const close = () => zebar.currentWidget().close();
+      window.addEventListener('blur', close);
+      window.addEventListener('keydown', e => e.key === 'Escape' && close());
+
+      function countdown(iso) {
+        if (!iso) return '';
+        const ms = new Date(iso) - Date.now();
+        if (ms <= 0) return 'reset';
+        const m = Math.round(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+        return d >= 1 ? `resets in ${d}d ${h % 24}h` : h >= 1 ? `resets in ${h}h ${m % 60}m` : `resets in ${m}m`;
+      }
+
+      function Bar({ title, win, threshold }) {
+        if (!win) return null;
+        const pct = Math.max(0, Math.min(100, win.pct));
+        const level = pct >= threshold ? 'high' : pct >= threshold - 20 ? 'mid' : 'low';
+        return (
+          <div className="limit">
+            <div className="limit-head"><span>{title}</span><span>{Math.round(pct)}%</span></div>
+            <div className="track"><div className={`fill ${level}`} style={{ width: `${pct}%` }}></div>
+              <div className="mark" style={{ left: `${threshold}%` }}></div></div>
+            <div className="reset">{countdown(win.resetsAt)}</div>
+          </div>
+        );
+      }
+
+      function App() {
+        const [data, setData] = useState(null);
+        const [busy, setBusy] = useState('');
+
+        async function load(refresh) {
+          setBusy(refresh ? 'Checking usage...' : '');
+          try {
+            const out = await zebar.shellExec('powershell.exe', [...PS, 'usage', ...(refresh ? ['-Refresh'] : [])]);
+            if (out.stdout.trim()) setData(JSON.parse(out.stdout.trim()));
+          } catch (err) { console.error(err); }
+          setBusy('');
+        }
+
+        async function act(label, args) {
+          setBusy(label);
+          try { await zebar.shellExec('powershell.exe', [...PS, ...args]); } catch (err) { console.error(err); }
+          await load(true);
+        }
+
+        useEffect(() => { load(false); }, []);
+
+        const providers = data?.providers || [];
+        return (
+          <div className="panel">
+            <div className="panel-head">
+              <span className="title">AI usage</span>
+              <button className="link" onClick={() => load(true)} title="Check usage now">
+                <i className="nf nf-md-refresh"></i>
+              </button>
+            </div>
+            {!data && <div className="note">Loading...</div>}
+            {providers.map(p => (
+              <section key={p.id}>
+                <div className="provider">
+                  <span>{p.name}</span>
+                  <button
+                    className={`switch ${p.mode === 'auto' ? 'on' : ''}`}
+                    title={p.mode === 'auto' ? `New sessions move to the account with the most headroom at ${p.threshold}%. Click for alert only.` : `Notifies at ${p.threshold}%. Click to switch automatically.`}
+                    onClick={() => act('Saving...', ['mode', p.id, p.mode === 'auto' ? 'manual' : 'auto', String(p.threshold)])}
+                  >
+                    {p.mode === 'auto' ? `Auto-switch at ${p.threshold}%` : `Alert at ${p.threshold}%`}
+                  </button>
+                </div>
+                {p.accounts.map(a => (
+                  <div key={a.id} className={`account ${a.active ? 'active' : ''}`}>
+                    <div className="account-head">
+                      <span className="label">{a.active ? <i className="nf nf-md-check_circle"></i> : null}{a.label}</span>
+                      <span className="plan">{a.plan}</span>
+                      {!a.active && (
+                        <button className="use" onClick={() => act(`Switching to ${a.label}...`, ['use', p.id, a.id])}>Use</button>
+                      )}
+                    </div>
+                    <Bar title="5 hours" win={a.session} threshold={p.threshold} />
+                    <Bar title="Week" win={a.weekly} threshold={p.threshold} />
+                    {(a.status !== 'ok' || a.stale) && (
+                      <div className="note">{a.stale ? 'Last known numbers. ' : ''}{a.status !== 'ok' ? a.status : ''}</div>
+                    )}
+                  </div>
+                ))}
+                <button className="add" onClick={() => { zebar.shellSpawn('powershell.exe', [...PS, 'add', p.id]).catch(console.error); close(); }}>
+                  <i className="nf nf-md-account_plus_outline"></i> Add {p.name} account
+                </button>
+              </section>
+            ))}
+            {busy && <div className="busy">{busy}</div>}
+          </div>
+        );
+      }
+
+      createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>

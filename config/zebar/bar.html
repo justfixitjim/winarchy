@@ -198,7 +198,7 @@
       }
 
       // AI usage: the active account's share of its 5-hour / weekly limits per agent, coloured
-      // by headroom. Hover for every account; click for the AI menu (accounts and switching).
+      // by headroom. Hover for a summary; click for the AI panel (agents.html: usage bars, switching).
       function Agents() {
         const [data, setData] = useState(null);
 
@@ -234,10 +234,10 @@
           p.accounts.map(a => `${a.active ? '> ' : '   '}${a.label}${a.plan ? ` (${a.plan})` : ''}: ` +
             ([win(a.session, '5h'), win(a.weekly, 'week')].filter(Boolean).join(', ') || a.status) +
             (a.stale ? ' [old]' : '') + (a.status !== 'ok' && (a.session || a.weekly) ? ` - ${a.status}` : '')).join('\n')
-        ).join('\n\n') + '\n\nClick for accounts and switching';
+        ).join('\n\n') + '\n\nClick for details and switching';
 
         return (
-          <button className="agents" title={tip} onClick={() => run(WINARCHY, ['ai'])}>
+          <button className="agents" title={tip} onClick={() => zebar.startWidgetPreset('agents', 'panel').catch(console.error)}>
             <i className="nf nf-md-robot_outline"></i>
             {providers.map(p => {
               const a = p.accounts.find(x => x.active) || p.accounts[0];
