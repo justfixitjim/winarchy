@@ -35,7 +35,9 @@ using System.Windows.Forms;
 class Node
 {
     public string Id, Label, Hint, Run, Args, Glaze, Terminal, Page, Builtin;
-    public string Key; // launcher: identity for usage history (e.g. "app:Spotify")
+    public string Key;      // usage-history identity (e.g. "app:Spotify")
+    public string Provider; // submenu filled in code: "apps" or "settings"
+    public bool Hidden;     // only shows up in search results (open windows)
     public bool Confirm;
     public List<Node> Items;
     public Node Parent;
@@ -226,7 +228,7 @@ class MenuForm : Form
         status.Text = keysMode
             ? rows.Count + " keybindings   type to filter   Esc close"
             : Program.IsLauncher && current == root
-                ? "apps, windows, settings, menu   =2+2 maths   Enter open   Esc close"
+                ? "type to search everything   =2+2 maths   Enter select   Esc close"
                 : "↑↓ move   Enter select   " + (current != root ? "Backspace back   " : "") + "Esc close";
     }
 
@@ -239,20 +241,7 @@ class MenuForm : Form
         var history = Program.History;
         if (q.Length == 0)
         {
-            var seen = new HashSet<Node>();
-            var menuNode = root.Items.FirstOrDefault(n => n.IsMenu);
-            if (menuNode != null)
-            {
-                result.Add(new Row { Node = menuNode, Text = menuNode.Label, Hint = HintFor(menuNode), Order = order++ });
-                seen.Add(menuNode);
-            }
-            foreach (var n in root.Items.Where(n => n.Key != null && history.ContainsKey(n.Key))
-                                        .OrderByDescending(n => history[n.Key]).Take(8))
-            {
-                result.Add(new Row { Node = n, Text = n.Label, Hint = HintFor(n), Order = order++ });
-                seen.Add(n);
-            }
-            foreach (var n in root.Items.Where(n => n.Hint == "App" && !seen.Contains(n)))
+            foreach (var n in root.Items.Where(n => !n.Hidden))
                 result.Add(new Row { Node = n, Text = n.Label, Hint = HintFor(n), Order = order++ });
             return result;
         }
@@ -267,11 +256,14 @@ class MenuForm : Form
 
         foreach (var pair in Flatten(current, ""))
         {
-            int sc = Score(q, pair.Value.Label, pair.Key, pair.Value.Hint);
+            var n = pair.Value;
+            int sc = Score(q, n.Label, pair.Key, n.Hint);
             if (sc <= 0) continue;
             int uses;
-            if (pair.Value.Key != null && history.TryGetValue(pair.Value.Key, out uses)) sc += Math.Min(uses, 20) * 15;
-            result.Add(new Row { Node = pair.Value, Text = pair.Key, Hint = HintFor(pair.Value), Score = sc, Order = order++ });
+            if (n.Key != null && history.TryGetValue(n.Key, out uses)) sc += Math.Min(uses, 20) * 15;
+            // Apps, settings pages and windows read best by name alone; menu items keep their path.
+            bool byName = n.Hidden || (n.Parent != null && n.Parent.Provider != null);
+            result.Add(new Row { Node = n, Text = byName ? n.Label : pair.Key, Hint = HintFor(n), Score = sc, Order = order++ });
         }
         return result.OrderByDescending(r => r.Score).ThenBy(r => r.Order).Take(200).ToList();
     }
@@ -396,7 +388,7 @@ class MenuForm : Form
         if (n.Page != null)
         {
             if (n.Page == "keys") { Program.NextMode = "keys"; Close(); return; }
-            if (n.Page == "launcher") { Program.NextMode = "launcher"; Close(); return; }
+            if (n.Page == "launcher") { GoTo(root); return; }
             var target = Program.FindById(root, n.Page);
             if (target != null) GoTo(target);
             return;
@@ -495,13 +487,13 @@ static class Program
     {
         Node root, start;
         bool keys = mode == "keys";
-        IsLauncher = mode == "launcher";
+        IsLauncher = !keys && mode != "prepared";
         try
         {
             if (IsLauncher)
             {
                 root = BuildLauncher();
-                start = root;
+                start = (mode.Length > 0 && mode != "launcher" ? FindById(root, mode) : null) ?? root;
             }
             else if (keys)
             {
@@ -654,30 +646,18 @@ static class Program
         catch { return null; }
     }
 
+    // The menu (Omarchy's layout, from menu.json) with its provider submenus filled in,
+    // plus open windows that only appear when you search.
     static Node BuildLauncher()
     {
-        var root = new Node { Label = "Search", Items = new List<Node>() };
+        Node root;
+        try { root = LoadMenu(); }
+        catch { root = new Node { Label = "winarchy", Items = new List<Node>() }; }
 
-        // The winarchy menu: its items are searchable ("Setup > Audio"), and it opens as a page.
-        try
-        {
-            var menu = LoadMenu();
-            menu.Label = "winarchy menu";
-            menu.Hint = "Super+Alt+Space  \u203a";
-            menu.Parent = root;
-            root.Items.Add(menu);
-        }
-        catch { }
+        var uris = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        CollectRuns(root, uris);
+        FillProviders(root, uris);
 
-        // Every app in the Start menu's "All apps" list.
-        foreach (var kv in Launcher.Apps().OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
-        {
-            if (kv.Value.StartsWith("http", StringComparison.OrdinalIgnoreCase)) continue;
-            if (kv.Key.StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase)) continue;
-            root.Items.Add(new Node { Label = kv.Key, Hint = "App", Run = "explorer.exe", Args = "shell:AppsFolder\\" + kv.Value, Key = "app:" + kv.Key, Parent = root });
-        }
-
-        // Open windows, from GlazeWM (picking one switches to its workspace).
         try
         {
             var psi = new ProcessStartInfo(GlazeCli, "query windows")
@@ -695,16 +675,41 @@ static class Program
                     var w = (Dictionary<string, object>)o;
                     string title = w["title"] as string, proc = w["processName"] as string;
                     if (string.IsNullOrEmpty(title) || proc == "winarchy") continue;
-                    root.Items.Add(new Node { Label = title, Hint = "Window \u00b7 " + proc, Builtin = "focus:" + w["id"], Key = "win:" + proc, Parent = root });
+                    root.Items.Add(new Node { Label = title, Hint = "Window \u00b7 " + proc, Builtin = "focus:" + w["id"], Key = "win:" + proc, Hidden = true, Parent = root });
                 }
             }
         }
         catch { }
-
-        // Settings pages and classic admin tools.
-        foreach (var st in SettingsPages)
-            root.Items.Add(new Node { Label = st[0], Hint = "Setting", Run = st[1], Args = st.Length > 2 ? st[2] : null, Key = "set:" + st[0], Parent = root });
         return root;
+    }
+
+    static void CollectRuns(Node n, HashSet<string> uris)
+    {
+        if (n.Run != null && n.Args == null) uris.Add(n.Run);
+        if (n.Items != null) foreach (var c in n.Items) CollectRuns(c, uris);
+    }
+
+    static void FillProviders(Node n, HashSet<string> uris)
+    {
+        if (n.Items == null) return;
+        if (n.Provider == "apps")
+        {
+            foreach (var kv in Launcher.Apps().OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                if (kv.Value.StartsWith("http", StringComparison.OrdinalIgnoreCase)) continue;
+                if (kv.Key.StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase)) continue;
+                n.Items.Add(new Node { Label = kv.Key, Hint = "App", Run = "explorer.exe", Args = "shell:AppsFolder\\" + kv.Value, Key = "app:" + kv.Key, Parent = n });
+            }
+        }
+        else if (n.Provider == "settings")
+        {
+            foreach (var st in SettingsPages)
+            {
+                if (st.Length == 2 && uris.Contains(st[1])) continue; // already elsewhere in the menu
+                n.Items.Add(new Node { Label = st[0], Hint = "Setting", Run = st[1], Args = st.Length > 2 ? st[2] : null, Key = "set:" + st[0], Parent = n });
+            }
+        }
+        foreach (var c in n.Items.ToList()) FillProviders(c, uris);
     }
 
     static readonly string[][] SettingsPages =
@@ -760,10 +765,12 @@ static class Program
             Glaze = str("glaze"), Terminal = str("terminal"), Page = str("page"), Builtin = str("builtin"),
             Confirm = d.ContainsKey("confirm") && d["confirm"] is bool && (bool)d["confirm"], Parent = parent
         };
-        if (d.ContainsKey("items"))
+        n.Provider = str("provider");
+        if (d.ContainsKey("items") || n.Provider != null)
         {
             n.Items = new List<Node>();
-            foreach (var o in (object[])d["items"]) n.Items.Add(ToNode((Dictionary<string, object>)o, n));
+            if (d.ContainsKey("items"))
+                foreach (var o in (object[])d["items"]) n.Items.Add(ToNode((Dictionary<string, object>)o, n));
         }
         return n;
     }

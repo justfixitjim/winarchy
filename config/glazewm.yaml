@@ -142,10 +142,10 @@ keybindings:
     bindings: ['lwin+shift+t']
 
   # ── Menus ─────────────────────────────────────────────────────────────
-  # Launcher: apps, windows, settings, menu, maths
+  # Menu: browse, or type to search everything
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe launcher']
     bindings: ['lwin+space']
-  # Omarchy-style menu (search + arrow keys)
+  # Menu (same as Super+Space)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe']
     bindings: ['lwin+alt+space']
   # Keybinding cheat sheet

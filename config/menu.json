@@ -1,81 +1,15 @@
 {
-  "_help": "Omarchy-style menu shown by Super+Alt+Space. Each item has a label plus ONE action: run (+args), glaze (GlazeWM command), terminal (PowerShell in Windows Terminal), page (jump to an id, or 'keys'), or items (a submenu). Optional: hint, confirm, id. %ENV% vars are expanded; {dir} = the winarchy folder, {menu} = this file.",
+  "_help": "winarchy menu (Super+Space / Super+Alt+Space), laid out like Omarchy's. Each item has a label and ONE of: run (+args), glaze (GlazeWM command), terminal (PowerShell in Windows Terminal), page (an id, or 'keys'), items (a submenu) or provider ('apps' = every installed app, 'settings' = every Windows Settings page). Optional: hint, confirm, id. %ENV% vars are expanded; {dir} = the winarchy folder, {menu} = this file. Typing searches everything: apps, open windows, settings and every item below.",
   "root": {
-    "label": "Go",
+    "label": "winarchy",
     "items": [
       {
         "label": "Apps",
-        "hint": "Super+Space",
-        "page": "launcher"
+        "provider": "apps",
+        "items": []
       },
       {
-        "label": "Learn",
-        "items": [
-          {
-            "label": "Keybindings",
-            "hint": "Super+K",
-            "page": "keys"
-          },
-          {
-            "label": "winarchy on GitHub",
-            "run": "https://github.com/justfixitjim/winarchy#readme"
-          },
-          {
-            "label": "GlazeWM docs",
-            "run": "https://github.com/glzr-io/glazewm#readme"
-          },
-          {
-            "label": "Omarchy manual",
-            "run": "https://learn.omacom.io/2/the-omarchy-manual"
-          }
-        ]
-      },
-      {
-        "label": "Capture",
-        "items": [
-          {
-            "label": "Screenshot region",
-            "hint": "Super+Shift+S",
-            "run": "ms-screenclip:"
-          },
-          {
-            "label": "Screen recording",
-            "hint": "Snipping Tool",
-            "run": "explorer.exe",
-            "args": "shell:AppsFolder\\Microsoft.ScreenSketch_8wekyb3d8bbwe!App"
-          }
-        ]
-      },
-      {
-        "label": "Toggle",
-        "items": [
-          {
-            "label": "Pause tiling",
-            "hint": "Super+Shift+P",
-            "glaze": "wm-toggle-pause"
-          },
-          {
-            "label": "Taskbar",
-            "run": "{dir}\\winarchy.exe",
-            "args": "taskbar"
-          },
-          {
-            "label": "Status bar (Zebar)",
-            "run": "powershell.exe",
-            "args": "-NoProfile -WindowStyle Hidden -Command \"if (Get-Process zebar -ErrorAction SilentlyContinue) { Stop-Process -Name zebar } else { Start-Process \\\"$env:ProgramFiles\\glzr.io\\Zebar\\zebar.exe\\\" }\""
-          },
-          {
-            "label": "Night light",
-            "run": "ms-settings:nightlight"
-          },
-          {
-            "label": "Do not disturb",
-            "run": "ms-settings:notifications"
-          }
-        ]
-      },
-      {
-        "label": "Style",
+        "label": "Appearance",
         "items": [
           {
             "label": "Theme & accent colour",
@@ -86,36 +20,149 @@
             "run": "ms-settings:personalization-background"
           },
           {
-            "label": "Window borders & gaps",
-            "hint": "GlazeWM config",
-            "run": "{dir}\\winarchy.exe",
-            "args": "launch edit \"%USERPROFILE%\\.glzr\\glazewm\\config.yaml\""
+            "label": "Font",
+            "run": "ms-settings:fonts"
           },
           {
-            "label": "Status bar widgets",
-            "hint": "Zebar",
-            "run": "{dir}\\winarchy.exe",
-            "args": "launch edit \"%USERPROFILE%\\.glzr\\zebar\""
+            "label": "Menu Bar",
+            "items": [
+              {
+                "label": "Show / hide bar",
+                "hint": "Zebar",
+                "run": "powershell.exe",
+                "args": "-NoProfile -WindowStyle Hidden -Command \"if (Get-Process zebar -ErrorAction SilentlyContinue) { Stop-Process -Name zebar } else { Start-Process \\\"$env:ProgramFiles\\glzr.io\\Zebar\\zebar.exe\\\" }\""
+              },
+              {
+                "label": "Show / hide Windows taskbar",
+                "run": "{dir}\\winarchy.exe",
+                "args": "taskbar"
+              },
+              {
+                "label": "Edit bar widgets",
+                "hint": "Zebar",
+                "run": "{dir}\\winarchy.exe",
+                "args": "launch edit \"%USERPROFILE%\\.glzr\\zebar\\winarchy\""
+              }
+            ]
+          },
+          {
+            "label": "Windows",
+            "items": [
+              {
+                "label": "Borders, gaps & colours",
+                "hint": "GlazeWM config",
+                "run": "{dir}\\winarchy.exe",
+                "args": "launch edit \"%USERPROFILE%\\.glzr\\glazewm\\config.yaml\""
+              },
+              {
+                "label": "Snap windows",
+                "run": "ms-settings:multitasking"
+              }
+            ]
+          },
+          {
+            "label": "Animations",
+            "run": "ms-settings:easeofaccess-visualeffects"
           }
         ]
       },
       {
-        "id": "setup",
-        "label": "Setup",
+        "label": "Trigger",
         "items": [
           {
-            "label": "Dictation (Handy)",
-            "hint": "Right Ctrl",
-            "run": "{dir}\\winarchy.exe",
-            "args": "launch app Handy cjpais.Handy"
+            "label": "Toggle",
+            "items": [
+              {
+                "label": "Pause tiling",
+                "hint": "Super+Shift+P",
+                "glaze": "wm-toggle-pause"
+              },
+              {
+                "label": "Windows taskbar",
+                "run": "{dir}\\winarchy.exe",
+                "args": "taskbar"
+              },
+              {
+                "label": "Night light",
+                "run": "ms-settings:nightlight"
+              },
+              {
+                "label": "Do not disturb",
+                "run": "ms-settings:notifications"
+              }
+            ]
+          },
+          {
+            "label": "Capture",
+            "items": [
+              {
+                "label": "Screenshot",
+                "hint": "Super+Shift+S",
+                "run": "ms-screenclip:"
+              },
+              {
+                "label": "Screen recording",
+                "hint": "Snipping Tool",
+                "run": "explorer.exe",
+                "args": "shell:AppsFolder\\Microsoft.ScreenSketch_8wekyb3d8bbwe!App"
+              }
+            ]
+          },
+          {
+            "label": "Clipboard settings",
+            "hint": "history: Super+V",
+            "run": "ms-settings:clipboard"
+          },
+          {
+            "label": "Speed Test",
+            "items": [
+              {
+                "label": "Network speed test",
+                "run": "https://fast.com"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "Setup",
+        "id": "setup",
+        "items": [
+          {
+            "label": "Defaults",
+            "items": [
+              {
+                "label": "Default apps",
+                "run": "ms-settings:defaultapps"
+              },
+              {
+                "label": "Dictation (Handy)",
+                "hint": "Right Ctrl",
+                "run": "{dir}\\winarchy.exe",
+                "args": "launch app Handy cjpais.Handy"
+              }
+            ]
           },
           {
             "label": "Audio",
             "run": "ms-settings:sound"
           },
           {
-            "label": "Wi-Fi",
-            "run": "ms-settings:network-wifi"
+            "label": "Network",
+            "items": [
+              {
+                "label": "Wi-Fi",
+                "run": "ms-settings:network-wifi"
+              },
+              {
+                "label": "Network status",
+                "run": "ms-settings:network-status"
+              },
+              {
+                "label": "VPN",
+                "run": "ms-settings:network-vpn"
+              }
+            ]
           },
           {
             "label": "Bluetooth",
@@ -131,39 +178,50 @@
           },
           {
             "label": "Keyboard",
-            "run": "ms-settings:keyboard"
+            "items": [
+              {
+                "label": "Keybindings",
+                "hint": "Super+K",
+                "page": "keys"
+              },
+              {
+                "label": "Keyboard settings",
+                "run": "ms-settings:keyboard"
+              },
+              {
+                "label": "Typing",
+                "run": "ms-settings:typing"
+              }
+            ]
           },
           {
             "label": "Mouse",
             "run": "ms-settings:mousetouchpad"
           },
           {
-            "label": "Printers",
-            "run": "ms-settings:printers"
+            "label": "Region",
+            "items": [
+              {
+                "label": "Language & region",
+                "run": "ms-settings:regionlanguage"
+              },
+              {
+                "label": "Date & time",
+                "run": "ms-settings:dateandtime"
+              }
+            ]
           },
           {
-            "label": "Default apps",
-            "run": "ms-settings:defaultapps"
+            "label": "Printers",
+            "run": "ms-settings:printers"
           },
           {
             "label": "Startup apps",
             "run": "ms-settings:startupapps"
           },
           {
-            "label": "Taskbar (auto-hide)",
-            "run": "ms-settings:taskbar"
-          },
-          {
-            "label": "Snap windows",
-            "run": "ms-settings:multitasking"
-          },
-          {
-            "label": "Animation effects",
-            "run": "ms-settings:easeofaccess-visualeffects"
-          },
-          {
-            "id": "config",
             "label": "Config",
+            "id": "config",
             "items": [
               {
                 "label": "GlazeWM config",
@@ -186,6 +244,302 @@
                 "args": "launch app PowerToys Microsoft.PowerToys"
               },
               {
+                "label": "Quit GlazeWM",
+                "glaze": "wm-exit",
+                "confirm": true
+              }
+            ]
+          },
+          {
+            "label": "All Windows settings",
+            "provider": "settings",
+            "items": []
+          }
+        ]
+      },
+      {
+        "label": "Install",
+        "items": [
+          {
+            "label": "Package",
+            "hint": "search winget",
+            "terminal": "$q = Read-Host 'Search winget for'; winget search $q; $id = Read-Host 'Package Id to install (blank to cancel)'; if ($id) { winget install --id $id -e }"
+          },
+          {
+            "label": "Microsoft Store",
+            "run": "ms-windows-store:"
+          },
+          {
+            "label": "Dictation (Handy)",
+            "hint": "winget",
+            "terminal": "winget install --id cjpais.Handy -e"
+          },
+          {
+            "label": "AI",
+            "items": [
+              {
+                "label": "Claude",
+                "hint": "winget",
+                "terminal": "winget install --id Anthropic.Claude -e"
+              },
+              {
+                "label": "ChatGPT",
+                "hint": "winget",
+                "terminal": "winget install --id OpenAI.ChatGPT -e"
+              },
+              {
+                "label": "Ollama",
+                "hint": "winget",
+                "terminal": "winget install --id Ollama.Ollama -e"
+              },
+              {
+                "label": "LM Studio",
+                "hint": "winget",
+                "terminal": "winget install --id ElementLabs.LMStudio -e"
+              }
+            ]
+          },
+          {
+            "label": "Browser",
+            "items": [
+              {
+                "label": "Firefox",
+                "hint": "winget",
+                "terminal": "winget install --id Mozilla.Firefox -e"
+              },
+              {
+                "label": "Chrome",
+                "hint": "winget",
+                "terminal": "winget install --id Google.Chrome -e"
+              },
+              {
+                "label": "Brave",
+                "hint": "winget",
+                "terminal": "winget install --id Brave.Brave -e"
+              },
+              {
+                "label": "Zen",
+                "hint": "winget",
+                "terminal": "winget install --id Zen-Team.Zen-Browser -e"
+              },
+              {
+                "label": "Edge",
+                "hint": "winget",
+                "terminal": "winget install --id Microsoft.Edge -e"
+              }
+            ]
+          },
+          {
+            "label": "Editor",
+            "items": [
+              {
+                "label": "VS Code",
+                "hint": "winget",
+                "terminal": "winget install --id Microsoft.VisualStudioCode -e"
+              },
+              {
+                "label": "Cursor",
+                "hint": "winget",
+                "terminal": "winget install --id Anysphere.Cursor -e"
+              },
+              {
+                "label": "Zed",
+                "hint": "winget",
+                "terminal": "winget install --id ZedIndustries.Zed -e"
+              },
+              {
+                "label": "Neovim",
+                "hint": "winget",
+                "terminal": "winget install --id Neovim.Neovim -e"
+              },
+              {
+                "label": "Notepad++",
+                "hint": "winget",
+                "terminal": "winget install --id Notepad++.Notepad++ -e"
+              },
+              {
+                "label": "Obsidian",
+                "hint": "winget",
+                "terminal": "winget install --id Obsidian.Obsidian -e"
+              }
+            ]
+          },
+          {
+            "label": "Terminal",
+            "items": [
+              {
+                "label": "Windows Terminal",
+                "hint": "winget",
+                "terminal": "winget install --id Microsoft.WindowsTerminal -e"
+              },
+              {
+                "label": "WezTerm",
+                "hint": "winget",
+                "terminal": "winget install --id wez.wezterm -e"
+              },
+              {
+                "label": "Alacritty",
+                "hint": "winget",
+                "terminal": "winget install --id Alacritty.Alacritty -e"
+              }
+            ]
+          },
+          {
+            "label": "Gaming",
+            "items": [
+              {
+                "label": "Steam",
+                "hint": "winget",
+                "terminal": "winget install --id Valve.Steam -e"
+              },
+              {
+                "label": "Epic Games",
+                "hint": "winget",
+                "terminal": "winget install --id EpicGames.EpicGamesLauncher -e"
+              },
+              {
+                "label": "GOG Galaxy",
+                "hint": "winget",
+                "terminal": "winget install --id GOG.Galaxy -e"
+              },
+              {
+                "label": "Battle.net",
+                "hint": "winget",
+                "terminal": "winget install --id Blizzard.BattleNet -e"
+              },
+              {
+                "label": "Discord",
+                "hint": "winget",
+                "terminal": "winget install --id Discord.Discord -e"
+              }
+            ]
+          },
+          {
+            "label": "Development",
+            "items": [
+              {
+                "label": "Git",
+                "hint": "winget",
+                "terminal": "winget install --id Git.Git -e"
+              },
+              {
+                "label": "Node.js (LTS)",
+                "hint": "winget",
+                "terminal": "winget install --id OpenJS.NodeJS.LTS -e"
+              },
+              {
+                "label": "Python 3.13",
+                "hint": "winget",
+                "terminal": "winget install --id Python.Python.3.13 -e"
+              }
+            ]
+          },
+          {
+            "label": "Media",
+            "items": [
+              {
+                "label": "Spotify",
+                "hint": "winget",
+                "terminal": "winget install --id Spotify.Spotify -e"
+              },
+              {
+                "label": "VLC",
+                "hint": "winget",
+                "terminal": "winget install --id VideoLAN.VLC -e"
+              },
+              {
+                "label": "FFmpeg",
+                "hint": "winget",
+                "terminal": "winget install --id Gyan.FFmpeg -e"
+              },
+              {
+                "label": "ImageMagick",
+                "hint": "winget",
+                "terminal": "winget install --id ImageMagick.ImageMagick -e"
+              }
+            ]
+          },
+          {
+            "label": "Utilities",
+            "items": [
+              {
+                "label": "7-Zip",
+                "hint": "winget",
+                "terminal": "winget install --id 7zip.7zip -e"
+              },
+              {
+                "label": "PowerToys",
+                "hint": "winget",
+                "terminal": "winget install --id Microsoft.PowerToys -e"
+              },
+              {
+                "label": "1Password",
+                "hint": "winget",
+                "terminal": "winget install --id AgileBits.1Password -e"
+              },
+              {
+                "label": "Bitwarden",
+                "hint": "winget",
+                "terminal": "winget install --id Bitwarden.Bitwarden -e"
+              },
+              {
+                "label": "Notion",
+                "hint": "winget",
+                "terminal": "winget install --id Notion.Notion -e"
+              },
+              {
+                "label": "Slack",
+                "hint": "winget",
+                "terminal": "winget install --id SlackTechnologies.Slack -e"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "Remove",
+        "items": [
+          {
+            "label": "Package",
+            "hint": "winget",
+            "terminal": "$q = Read-Host 'Find installed app'; winget list $q; $id = Read-Host 'Package Id to uninstall (blank to cancel)'; if ($id) { winget uninstall --id $id -e }"
+          },
+          {
+            "label": "Installed apps",
+            "run": "ms-settings:appsfeatures"
+          }
+        ]
+      },
+      {
+        "label": "Update",
+        "items": [
+          {
+            "label": "winarchy",
+            "hint": "re-run installer",
+            "terminal": "irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | iex"
+          },
+          {
+            "label": "All apps",
+            "hint": "winget",
+            "terminal": "winget upgrade; if ((Read-Host 'Upgrade all of these? (y/N)') -eq 'y') { winget upgrade --all }"
+          },
+          {
+            "label": "Windows",
+            "run": "ms-settings:windowsupdate"
+          },
+          {
+            "label": "Store apps",
+            "run": "ms-windows-store://downloadsandupdates"
+          },
+          {
+            "label": "Process",
+            "items": [
+              {
+                "label": "Restart GlazeWM",
+                "run": "cmd.exe",
+                "args": "/c \"\"%ProgramFiles%\\glzr.io\\GlazeWM\\cli\\glazewm.exe\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"%ProgramFiles%\\glzr.io\\GlazeWM\\glazewm.exe\"\""
+              },
+              {
                 "label": "Reload GlazeWM config",
                 "hint": "Super+Ctrl+R",
                 "glaze": "wm-reload-config"
@@ -195,78 +549,55 @@
                 "glaze": "wm-redraw"
               },
               {
-                "label": "Restart GlazeWM",
-                "run": "cmd.exe",
-                "args": "/c \"\"%ProgramFiles%\\glzr.io\\GlazeWM\\cli\\glazewm.exe\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"%ProgramFiles%\\glzr.io\\GlazeWM\\glazewm.exe\"\""
+                "label": "Restart bar",
+                "hint": "Zebar",
+                "run": "powershell.exe",
+                "args": "-NoProfile -WindowStyle Hidden -Command \"Stop-Process -Name zebar -ErrorAction SilentlyContinue; Start-Sleep 1; Start-Process \\\"$env:ProgramFiles\\glzr.io\\Zebar\\zebar.exe\\\"\""
               },
               {
-                "label": "Quit GlazeWM",
-                "glaze": "wm-exit",
-                "confirm": true
+                "label": "Restart dictation",
+                "hint": "Handy",
+                "run": "powershell.exe",
+                "args": "-NoProfile -WindowStyle Hidden -Command \"Stop-Process -Name handy -ErrorAction SilentlyContinue; Start-Sleep 1; Start-Process \\\"$env:LOCALAPPDATA\\Handy\\handy.exe\\\"\""
               }
             ]
           }
         ]
       },
       {
-        "label": "Install",
+        "label": "Learn",
         "items": [
           {
-            "label": "Search & install an app",
-            "hint": "winget",
-            "terminal": "$q = Read-Host 'Search winget for'; winget search $q; $id = Read-Host 'Package Id to install (blank to cancel)'; if ($id) { winget install --id $id -e }"
+            "label": "Keybindings",
+            "hint": "Super+K",
+            "page": "keys"
           },
           {
-            "label": "Dictation (Handy)",
-            "hint": "winget",
-            "terminal": "winget install --id cjpais.Handy -e"
+            "label": "winarchy",
+            "run": "https://github.com/justfixitjim/winarchy#readme"
           },
           {
-            "label": "Microsoft Store",
-            "run": "ms-windows-store:"
+            "label": "Omarchy",
+            "run": "https://learn.omacom.io/2/the-omarchy-manual"
+          },
+          {
+            "label": "GlazeWM",
+            "run": "https://github.com/glzr-io/glazewm#readme"
+          },
+          {
+            "label": "Zebar",
+            "run": "https://github.com/glzr-io/zebar#readme"
           }
         ]
       },
       {
-        "label": "Remove",
-        "items": [
-          {
-            "label": "Uninstall an app",
-            "run": "ms-settings:appsfeatures"
-          },
-          {
-            "label": "Uninstall with winget",
-            "hint": "winget",
-            "terminal": "$q = Read-Host 'Find installed app'; winget list $q; $id = Read-Host 'Package Id to uninstall (blank to cancel)'; if ($id) { winget uninstall --id $id -e }"
-          }
-        ]
-      },
-      {
-        "label": "Update",
-        "items": [
-          {
-            "label": "Update all apps",
-            "hint": "winget",
-            "terminal": "winget upgrade; if ((Read-Host 'Upgrade all of these? (y/N)') -eq 'y') { winget upgrade --all }"
-          },
-          {
-            "label": "Windows Update",
-            "run": "ms-settings:windowsupdate"
-          },
-          {
-            "label": "Store app updates",
-            "run": "ms-windows-store://downloadsandupdates"
-          }
-        ]
-      },
-      {
-        "label": "About this PC",
-        "run": "ms-settings:about"
-      },
-      {
-        "id": "system",
         "label": "System",
+        "id": "system",
         "items": [
+          {
+            "label": "About",
+            "run": "ms-settings:about"
+          },
           {
             "label": "Lock",
             "hint": "Super+L",

@@ -8,8 +8,7 @@ It's a thin layer over good existing tools:
 |---|---|
 | Hyprland tiling | [GlazeWM](https://github.com/glzr-io/glazewm), with a helper that adds Hyprland-style automatic splits |
 | Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, volume, stats, weather in °F); the Windows taskbar is hidden |
-| Walker (Super+Space) | `winarchy launcher`: one search box for apps, open windows, Settings pages, the winarchy menu and quick maths |
-| Omarchy menu (Super+Alt+Space) | `winarchy` menu: a searchable, arrow-key menu for system, setup, install and power actions |
+| Walker (Super+Space) and the Omarchy menu | The `winarchy` menu: Omarchy's sections (Apps, Appearance, Trigger, Setup, Install, Remove, Update, Learn, System), searchable across apps, open windows and Settings pages, plus quick maths |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
 | Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
 
@@ -43,8 +42,7 @@ Re-run it any time to upgrade. Options:
 
 | Keys | Action |
 |---|---|
-| Super+Space | Launcher: apps, open windows, Settings pages, the menu; type `=2+2` or `15%*80` for maths |
-| Super+Alt+Space | winarchy menu |
+| Super+Space or Super+Alt+Space | The menu: browse it, or type to search apps, windows, Settings pages and menu items; `=2+2` for maths |
 | Super+K | Every keybinding, searchable |
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
 | Super+Enter | Terminal |
@@ -65,17 +63,30 @@ Re-run it any time to upgrade. Options:
 
 Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, Win+R, Win+I and Win+N. Like Omarchy, tapping Super on its own does nothing; Ctrl+Esc still opens Start.
 
-## Launcher
+## Menu and search
 
-Super+Space opens one search box (Omarchy's Walker) over:
+Super+Space (or Super+Alt+Space) opens the winarchy menu, laid out like Omarchy's:
 
-- **Apps:** everything in the Start menu's All apps list. Ones you open often rise to the top.
-- **Open windows:** pick one to jump to it, switching workspace if needed.
-- **Settings:** Windows Settings pages plus classic tools such as Device Manager and Services.
-- **The winarchy menu:** its items are searchable too, for example "bluetooth" or "restart".
-- **Maths:** type `=` or an expression such as `12*7` or `15%*80`. Enter copies the result.
+| Section | What's in it |
+|---|---|
+| **Apps** | Every installed app. Ones you open often rank higher in search. |
+| **Appearance** | Theme and accent colour, background, font, the bar, window borders and gaps, animations |
+| **Trigger** | Toggles (pause tiling, taskbar, night light, do not disturb), capture, speed test |
+| **Setup** | Defaults, audio, network, Bluetooth, displays, power, keyboard, region, config files, and every Windows Settings page |
+| **Install** | Search winget, plus curated picks: AI, browsers, editors, terminals, gaming, dev tools, media, utilities |
+| **Remove** | Uninstall with winget or Windows' Installed apps |
+| **Update** | winarchy itself, all apps, Windows, Store apps, restart GlazeWM, the bar or dictation |
+| **Learn** | Keybindings, plus docs for winarchy, Omarchy, GlazeWM and Zebar |
+| **System** | About, lock, sleep, sign out, restart, shut down |
 
-It doesn't search files; Explorer (Super+Shift+F) does that.
+Arrow keys and Enter browse the menu. Start typing anywhere and it searches everything at once:
+
+- every app
+- every open window (pick one to jump to it, switching workspace if needed)
+- every Settings page
+- every menu item
+
+Type maths such as `=12*7` or `15%*80` and Enter copies the result. File search isn't included; Explorer (Super+Shift+F) does that.
 
 ## Top bar
 
@@ -94,7 +105,7 @@ winarchy uses [Handy](https://github.com/cjpais/Handy) for dictation. It's free 
 1. Open **Handy** from Super+Space and go through its setup: pick a speech model and allow the microphone.
 2. Re-run `install.ps1`. It closes Handy, puts push-to-talk on **Right Ctrl**, sets Handy to start hidden at sign-in, and reopens it. If you already changed Handy's shortcut from its default (Ctrl+Space), your key is kept.
 
-Then hold Right Ctrl, speak, and let go: the text is pasted where your cursor is. Esc cancels. Super+Alt+Space → Setup → Dictation opens Handy.
+Then hold Right Ctrl, speak, and let go: the text is pasted where your cursor is. Esc cancels. Super+Space → Setup → Defaults → Dictation opens Handy.
 
 Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the focused app and opens its menus. Right Ctrl does nothing on its own in apps.
 
@@ -107,7 +118,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `terminal` for PowerShell run in Windows Terminal.
   - `page` to jump to another page, or `items` for a submenu.
 - **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu` and `autotile`. Changes take effect when GlazeWM restarts.
-- **Taskbar:** Super+Alt+Space → Toggle → Taskbar shows or hides it on the fly.
+- **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
 - **Top bar:** `~\.glzr\zebar\winarchyar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
 ## Uninstall
