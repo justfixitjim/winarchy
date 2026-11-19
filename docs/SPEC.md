@@ -56,8 +56,8 @@ Add a **Tools** page to the menu, with matching launcher entries. Each item is a
 ## 2. Automatic theming of everything (including third-party apps)
 
 > **Status: mostly built (Nov 2026).**
-> - Done: 8 themes (`themes/*.json`), `tools/theme.ps1` (set, next, list, restore), Super+Ctrl+Shift+Space picker and Appearance → Theme / Next theme. Targets: GlazeWM borders, Zebar bar, winarchy menu, Windows dark/light and accent, Windows Terminal, VS Code. Previous settings are backed up on first use and restored on uninstall.
-> - Still open: wallpapers per theme, Obsidian, Firefox / Chromium, a live preview in the picker, and following Windows' light/dark schedule.
+> - Done: 8 themes (`themes/*.json`), `tools/theme.ps1` (set, next, list, restore), Super+Ctrl+Shift+Space picker and Appearance → Theme / Next theme. Targets: GlazeWM borders, Zebar bar, winarchy menu, Windows dark/light and accent, wallpaper, Windows Terminal, VS Code. Wallpapers: the user's own per theme (`backgrounds\<id>`), then three generated from the palette (glow, bands, dot grid), cycled with Next background. Previous settings are backed up on first use and restored on uninstall.
+> - Still open: Obsidian, Firefox / Chromium, a live preview in the picker, and following Windows' light/dark schedule.
 
 ### What Omarchy does
 
@@ -179,5 +179,5 @@ winarchy hides the taskbar, which also hides the notification area. Apps that li
 
 1. ~~**Media utilities.**~~ Built.
 2. ~~**System tray in the bar.**~~ Shipped.
-3. ~~**Theming.**~~ Mostly built (wallpapers and a few apps left). The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
+3. ~~**Theming.**~~ Mostly built (a few apps left). The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
 4. **AI usage panel and switching.** It depends on undocumented usage endpoints, so expect upkeep when they change.

@@ -24,6 +24,12 @@
             "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\theme.ps1\" -Next"
           },
           {
+            "label": "Next background",
+            "hint": "theme wallpapers",
+            "run": "powershell.exe",
+            "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\theme.ps1\" -NextBackground"
+          },
+          {
             "label": "Windows colours",
             "run": "ms-settings:colors"
           },

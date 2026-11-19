@@ -3,10 +3,12 @@
 #   theme.ps1 <id>            apply themes\<id>.json (for example tokyo-night)
 #   theme.ps1 -Next           apply the next theme in the list
 #   theme.ps1 -List           list themes (* marks the current one)
+#   theme.ps1 -NextBackground show the current theme's next wallpaper
 #   theme.ps1 -Restore        put back the Windows, Terminal and VS Code settings from before the first theme
 #
 # Targets: glazewm (window borders), bar (Zebar), menu (winarchy menu), windows (dark or light
-# mode and accent colour), terminal (Windows Terminal colour scheme), vscode (colour theme,
+# mode and accent colour), wallpaper (your own pictures in ~\.glzr\winarchy\backgrounds\<id>,
+# then ones drawn from the theme's colours), terminal (Windows Terminal colour scheme), vscode (colour theme,
 # installing its extension if needed). Pick with -Only or -Skip, or set "themeSkip" in
 # ~\.glzr\winarchy\settings.json, for example "themeSkip": ["vscode"].
 param(
@@ -19,7 +21,8 @@ param(
     # Write the files but don't restart the bar or reload GlazeWM (used by install.ps1).
     [switch]$NoReload,
     # Report failures only in the console, not in a message box.
-    [switch]$NoPopup
+    [switch]$NoPopup,
+    [switch]$NextBackground
 )
 $ErrorActionPreference = 'Stop'
 
@@ -119,7 +122,10 @@ $regValues = @(
     @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent', 'AccentColorMenu'),
     @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent', 'StartColorMenu'),
     @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent', 'AccentPalette'),
-    @('HKCU:\Control Panel\Desktop', 'AutoColorization')
+    @('HKCU:\Control Panel\Desktop', 'AutoColorization'),
+    @('HKCU:\Control Panel\Desktop', 'Wallpaper'),
+    @('HKCU:\Control Panel\Desktop', 'WallpaperStyle'),
+    @('HKCU:\Control Panel\Desktop', 'TileWallpaper')
 )
 $vscodeSettings = Join-Path $env:APPDATA 'Code\User\settings.json'
 $terminalSettings = @(
@@ -134,6 +140,7 @@ function Save-Backup {
         $item = Get-ItemProperty -Path $rv[0] -Name $rv[1] -ErrorAction SilentlyContinue
         $v = if ($item) { $item.($rv[1]) } else { $null }
         if ($v -is [array]) { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'Binary'; Value = [Convert]::ToBase64String([byte[]]$v) } }  # binary values arrive as object[]
+        elseif ($v -is [string]) { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'String'; Value = $v } }
         elseif ($null -ne $v) { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'DWord'; Value = (ConvertTo-Dword $v) } }
         else { @{ Path = $rv[0]; Name = $rv[1]; Kind = 'None'; Value = $null } }
     }
@@ -148,6 +155,9 @@ function Save-Backup {
 Add-Type -Namespace Winarchy -Name Native -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)]
 public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+public static extern bool SystemParametersInfo(uint action, uint param, string value, uint flags);
+[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 '@
 function Send-ColorChange {
     $r = [UIntPtr]::Zero
@@ -156,16 +166,107 @@ function Send-ColorChange {
     }
 }
 
+# --- Wallpapers -----------------------------------------------------------------------------
+function Set-Wallpaper([string]$path, [switch]$KeepStyle) {
+    if (-not $KeepStyle) {
+        Set-ItemProperty 'HKCU:\Control Panel\Desktop' WallpaperStyle '10' -Type String   # fill
+        Set-ItemProperty 'HKCU:\Control Panel\Desktop' TileWallpaper '0' -Type String
+    }
+    # SPI_SETDESKWALLPAPER, saved to the profile and broadcast.
+    if (-not [Winarchy.Native]::SystemParametersInfo(0x14, 0, $path, 3)) { throw "Windows refused the wallpaper $path" }
+}
+
+function ConvertTo-Color([string]$hex, [int]$alpha = 255) {
+    $h = $hex.TrimStart('#')
+    [Drawing.Color]::FromArgb($alpha, [Convert]::ToInt32($h.Substring(0, 2), 16), [Convert]::ToInt32($h.Substring(2, 2), 16), [Convert]::ToInt32($h.Substring(4, 2), 16))
+}
+
+# Three wallpapers drawn from the theme's colours, at the main screen's resolution (cached).
+function New-ThemeBackgrounds($id, $theme) {
+    Add-Type -AssemblyName System.Drawing, System.Windows.Forms
+    [void][Winarchy.Native]::SetProcessDPIAware()
+    $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $w = [Math]::Max($screen.Width, 1280); $h = [Math]::Max($screen.Height, 720)
+    $dir = Join-Path $stateDir 'backgrounds'
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $themeFile = Join-Path $themesDir "$id.json"
+    $c = $theme.colors; $tc = $theme.terminal
+    $out = @()
+    foreach ($style in 'glow', 'bands', 'grid') {
+        $file = Join-Path $dir ("{0}-{1}-{2}x{3}.png" -f $id, $style, $w, $h)
+        $out += $file
+        if ((Test-Path $file) -and (Get-Item $file).LastWriteTime -gt (Get-Item $themeFile).LastWriteTime) { continue }
+        $bmp = New-Object Drawing.Bitmap $w, $h
+        $g = [Drawing.Graphics]::FromImage($bmp)
+        $g.SmoothingMode = 'AntiAlias'
+        $rect = New-Object Drawing.Rectangle 0, 0, $w, $h
+        $base = New-Object Drawing.Drawing2D.LinearGradientBrush $rect, (ConvertTo-Color $c.background), (ConvertTo-Color $c.surface), 90
+        $g.FillRectangle($base, $rect)
+        switch ($style) {
+            'glow' {
+                foreach ($spot in @(@(0.78, 0.72, 0.9, $c.accent, 70), @(0.15, 0.2, 0.6, $tc.magenta, 40))) {
+                    $d = [int]($w * $spot[2])
+                    $path = New-Object Drawing.Drawing2D.GraphicsPath
+                    $path.AddEllipse([int]($w * $spot[0] - $d / 2), [int]($h * $spot[1] - $d / 2), $d, $d)
+                    $pg = New-Object Drawing.Drawing2D.PathGradientBrush $path
+                    $pg.CenterColor = ConvertTo-Color $spot[3] $spot[4]
+                    $pg.SurroundColors = @([Drawing.Color]::FromArgb(0, 0, 0, 0))
+                    $pg.SetSigmaBellShape(1.0, 1.0)   # soft falloff, no visible edge
+                    $g.FillPath($pg, $path)
+                }
+            }
+            'bands' {
+                $colors = @($tc.blue, $tc.magenta, $tc.cyan, $tc.green, $tc.yellow, $tc.red)
+                $g.TranslateTransform($w * 0.6, $h * 0.5); $g.RotateTransform(-28)
+                $bw = [int]($h * 0.07)
+                for ($k = 0; $k -lt $colors.Count; $k++) {
+                    $brush = New-Object Drawing.SolidBrush (ConvertTo-Color $colors[$k] 46)
+                    $g.FillRectangle($brush, -$w * 1.5, ($k - 3) * $bw * 1.25, $w * 3, $bw)
+                }
+                $g.ResetTransform()
+            }
+            'grid' {
+                $step = [int]($h / 36); $r = [Math]::Max(2, [int]($step / 9))
+                $dot = New-Object Drawing.SolidBrush (ConvertTo-Color $c.muted 90)
+                $hot = New-Object Drawing.SolidBrush (ConvertTo-Color $c.accent 200)
+                $rnd = New-Object Random ($id.GetHashCode())
+                for ($y = $step; $y -lt $h; $y += $step) {
+                    for ($x = $step; $x -lt $w; $x += $step) {
+                        $b = if ($rnd.Next(60) -eq 0) { $hot } else { $dot }
+                        $g.FillEllipse($b, $x - $r, $y - $r, 2 * $r, 2 * $r)
+                    }
+                }
+            }
+        }
+        $g.Dispose()
+        $bmp.Save($file, [Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Dispose()
+    }
+    return $out
+}
+
+function Get-Backgrounds($id, $theme) {
+    $list = @()
+    $own = Join-Path $root "backgrounds\$id"
+    if (Test-Path $own) {
+        $list += @(Get-ChildItem $own -File | Where-Object { $_.Extension -match '^\.(jpe?g|png|bmp)$' } | Sort-Object Name | ForEach-Object { $_.FullName })
+    }
+    $list += @(New-ThemeBackgrounds $id $theme)
+    return $list
+}
+
 if ($Restore) {
     if (-not (Test-Path $backupPath)) { Log 'Nothing to restore (no theme was ever applied).'; return }
     $b = Read-Text $backupPath | ConvertFrom-Json
     foreach ($r in $b.Registry) {
         if ($r.Kind -eq 'None') { Remove-ItemProperty -Path $r.Path -Name $r.Name -ErrorAction SilentlyContinue; continue }
         if (-not (Test-Path $r.Path)) { New-Item -Path $r.Path -Force | Out-Null }
-        $v = if ($r.Kind -eq 'Binary') { [Convert]::FromBase64String($r.Value) } else { ConvertTo-Dword $r.Value }
+        $v = if ($r.Kind -eq 'Binary') { [Convert]::FromBase64String($r.Value) } elseif ($r.Kind -eq 'String') { [string]$r.Value } else { ConvertTo-Dword $r.Value }
         Set-ItemProperty -Path $r.Path -Name $r.Name -Value $v -Type $r.Kind
     }
     Send-ColorChange
+    $wp = $b.Registry | Where-Object { $_.Name -eq 'Wallpaper' }
+    if ($wp -and $wp.Kind -eq 'String') { Set-Wallpaper $wp.Value -KeepStyle }
     foreach ($ts in $terminalSettings) { if (Test-Path "$ts.winarchy-backup") { Move-Item "$ts.winarchy-backup" $ts -Force } }
     if (Test-Path $vscodeSettings) {
         $vs = ConvertFrom-Jsonc (Read-Text $vscodeSettings)
@@ -181,6 +282,18 @@ if ($Restore) {
 }
 
 $themes = @(Get-Themes)
+if ($NextBackground) {
+    $state = Read-Text $currentPath | ConvertFrom-Json
+    $th = ($themes | Where-Object { $_.Id -eq $state.id } | Select-Object -First 1).Theme
+    $bgs = @(Get-Backgrounds $state.id $th)
+    $i = ([int]$state.background + 1) % $bgs.Count
+    Save-Backup
+    Set-Wallpaper $bgs[$i]
+    Set-Prop $state 'background' $i
+    Write-Text $currentPath (($state | ConvertTo-Json -Depth 5) + "`n")
+    Log "Background $($i + 1) of $($bgs.Count): $(Split-Path $bgs[$i] -Leaf)"
+    return
+}
 if ($List) {
     $cur = Get-CurrentId
     foreach ($t in $themes) { '{0} {1,-18} {2}' -f $(if ($t.Id -eq $cur) { '*' } else { ' ' }), $t.Id, $t.Name }
@@ -214,7 +327,7 @@ function Try-Target($target, [scriptblock]$block) {
 }
 
 # Remember the choice (the winarchy menu reads its colours from here).
-$cur = [ordered]@{ id = $pick.Id; name = $t.name; mode = $t.mode; colors = $c }
+$cur = [ordered]@{ id = $pick.Id; name = $t.name; mode = $t.mode; background = 0; colors = $c }
 Write-Text $currentPath (($cur | ConvertTo-Json -Depth 5) + "`n")
 if (Want 'menu') { Log '  menu: next time it opens' }
 
@@ -279,6 +392,13 @@ Try-Target 'windows' {
     Set-ItemProperty 'HKCU:\Control Panel\Desktop' AutoColorization 0 -Type DWord  # don't pick the accent from the wallpaper
     Send-ColorChange
     Log "  windows: $($t.mode) mode, accent $($c.accent)"
+}
+
+Try-Target 'wallpaper' {
+    Save-Backup
+    $bgs = @(Get-Backgrounds $pick.Id $t)
+    Set-Wallpaper $bgs[0]
+    Log "  wallpaper: $(Split-Path $bgs[0] -Leaf) (1 of $($bgs.Count); menu > Appearance > Next background)"
 }
 
 Try-Target 'terminal' {

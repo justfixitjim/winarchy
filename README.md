@@ -129,10 +129,11 @@ Super+Ctrl+Shift+Space (or menu → Appearance → Theme) switches every colour 
 A theme changes:
 - **GlazeWM** window borders, the **top bar** and the **winarchy menu**.
 - **Windows:** dark or light mode and the accent colour.
+- **Wallpaper:** your own pictures from `~\.glzr\winarchy\backgrounds\<theme id>` (for example `backgrounds\gruvbox`), then three drawn from the theme's colours. Appearance → Next background cycles them.
 - **Windows Terminal:** a `winarchy` colour scheme, set as the default.
 - **VS Code:** the matching colour theme, installing its extension if needed.
 
-To leave some out, add them to `~\.glzr\winarchy\settings.json`, for example `"themeSkip": ["vscode", "windows"]`. The first theme you pick saves your previous Windows, Terminal and VS Code settings, and uninstalling puts them back (`tools\theme.ps1 -Restore` does it by hand). Themes are JSON files in `~\.glzr\winarchy\themes`; copy one to make your own.
+To leave some out, add them to `~\.glzr\winarchy\settings.json`, for example `"themeSkip": ["vscode", "wallpaper"]`. The first theme you pick saves your previous Windows colours, wallpaper, Terminal and VS Code settings, and uninstalling puts them back (`tools\theme.ps1 -Restore` does it by hand). Themes are JSON files in `~\.glzr\winarchy\themes`; copy one to make your own.
 
 ## Dictation
 
