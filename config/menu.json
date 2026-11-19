@@ -114,10 +114,10 @@
         "label": "Setup",
         "items": [
           {
-            "label": "Dictation (Superwhisper)",
+            "label": "Dictation (Handy)",
             "hint": "Right Ctrl",
             "run": "{dir}\\winarchy.exe",
-            "args": "launch app superwhisper SuperUltra.superwhisper"
+            "args": "launch app Handy cjpais.Handy"
           },
           {
             "label": "Audio",
@@ -227,9 +227,9 @@
             "terminal": "$q = Read-Host 'Search winget for'; winget search $q; $id = Read-Host 'Package Id to install (blank to cancel)'; if ($id) { winget install --id $id -e }"
           },
           {
-            "label": "Dictation (Superwhisper)",
+            "label": "Dictation (Handy)",
             "hint": "winget",
-            "terminal": "winget install --id SuperUltra.superwhisper -e"
+            "terminal": "winget install --id cjpais.Handy -e"
           },
           {
             "label": "Microsoft Store",

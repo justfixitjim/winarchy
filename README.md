@@ -11,7 +11,7 @@ It's a thin layer over good existing tools:
 | Walker (Super+Space) | PowerToys [Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview) |
 | Omarchy menu (Super+Alt+Space) | `winarchy` menu: a searchable, arrow-key menu for system, setup, install and power actions |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
-| Superwhisper dictation on Right Alt | [Superwhisper](https://superwhisper.com/windows) for Windows with local models: hold **Right Ctrl** to talk (Superwhisper for Windows can't use Right Alt) |
+| Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
 
 ## Install
 
@@ -23,7 +23,7 @@ irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | i
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
-1. Installs GlazeWM, Zebar, PowerToys, Windows Terminal and Superwhisper with winget, skipping any already installed.
+1. Installs GlazeWM, Zebar, PowerToys, Windows Terminal and Handy with winget, skipping any already installed.
 2. Builds `winarchy.exe` and `winarchy-daemon.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
@@ -36,7 +36,7 @@ Re-run it any time to upgrade. Options:
 - `-KeepStartMenu` lets a lone Super tap open Start.
 - `-SkipApps` skips winget.
 - `-Celsius` shows the bar's temperature in Celsius (the default is Fahrenheit).
-- `-NoDictation` skips Superwhisper.
+- `-NoDictation` skips Handy.
 
 ## Keys
 
@@ -66,14 +66,14 @@ Windows keeps Win+L (lock), Win+V (clipboard), Win+Shift+S (screenshot), Win+E, 
 
 ## Dictation
 
-Like Omarchy, winarchy uses Superwhisper for dictation, running a local speech model on your PC. The installer installs it, but its first-run setup is yours to do once:
+winarchy uses [Handy](https://github.com/cjpais/Handy) for dictation. It's free and open source, and the speech model runs on your PC, so nothing you say leaves it. The installer installs Handy, but its first-run setup is yours to do once:
 
-1. Open **superwhisper** from Super+Space and go through its setup. Pick a local model: the free tier includes every Whisper model, up to Large v3 Turbo (fastest on a GPU). Superwhisper's docs list Parakeet and Cohere Transcribe as Pro models.
-2. Re-run `install.ps1`. It closes Superwhisper, sets **Push to talk** to **Right Ctrl** and turns on **Launch on login**, then reopens it. It only does this while push-to-talk is still on Superwhisper's default (Ctrl+Space), so a key you picked yourself is kept. You can also set both in Superwhisper → Configuration.
+1. Open **Handy** from Super+Space and go through its setup: pick a speech model and allow the microphone.
+2. Re-run `install.ps1`. It closes Handy, puts push-to-talk on **Right Ctrl**, sets Handy to start hidden at sign-in, and reopens it. If you already changed Handy's shortcut from its default (Ctrl+Space), your key is kept.
 
-Then hold Right Ctrl, speak, and let go: the text is pasted where your cursor is. A quick tap of Right Ctrl starts and stops a longer recording, and Esc cancels.
+Then hold Right Ctrl, speak, and let go: the text is pasted where your cursor is. Esc cancels. Super+Alt+Space → Setup → Dictation opens Handy.
 
-Why not Right Alt like Omarchy? Superwhisper for Windows never sees a Right Alt press, so it falls through to the focused app and opens its menus. Right Ctrl does nothing on its own in apps. Super+Alt+Space → Setup → Dictation reopens its settings.
+Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the focused app and opens its menus. Right Ctrl does nothing on its own in apps.
 
 ## Customise
 
@@ -94,7 +94,7 @@ Why not Right Alt like Omarchy? Superwhisper for Windows never sees a Right Alt 
 .\uninstall.ps1 -RemoveApps
 ```
 
-This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replaced, and removes the sign-in shortcut. Superwhisper stays installed.
+This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replaced, and removes the sign-in shortcut. Handy stays installed.
 
 ## How it works
 

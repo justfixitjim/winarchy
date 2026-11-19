@@ -30,7 +30,7 @@ param(
     [switch]$SkipApps,
     # Show the bar's temperature in Celsius instead of Fahrenheit.
     [switch]$Celsius,
-    # Don't install Superwhisper (local dictation, hold Right Ctrl to talk).
+    # Don't install Handy (local dictation: hold Right Ctrl to talk).
     [switch]$NoDictation
 )
 
@@ -87,7 +87,7 @@ if (-not $SkipApps) {
         @{ Id = 'Microsoft.WindowsTerminal'; Name = 'Windows Terminal'; Present = { Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe" } }
     )
     if (-not $NoDictation) {
-        $apps += @{ Id = 'SuperUltra.superwhisper'; Name = 'Superwhisper'; Present = { Test-Path "$env:LOCALAPPDATA\superwhisper\Superwhisper.exe" } }
+        $apps += @{ Id = 'cjpais.Handy'; Name = 'Handy (dictation)'; Present = { Test-Path "$env:LOCALAPPDATA\Handy\handy.exe" } }
     }
     foreach ($app in $apps) {
         if (& $app.Present) { Note "$($app.Name): already installed"; continue }
@@ -207,35 +207,54 @@ if (Test-Path $zebarSettings) {
 }
 Write-Utf8 $zebarSettings (($zs | ConvertTo-Json -Depth 5) + "`n")
 
-# --- 7. Dictation: Superwhisper push-to-talk on Right Ctrl -----------------------------------
-# Superwhisper writes preferences.json during its first-run setup. Once that exists, bind
-# Right Ctrl, unless the user already picked their own push-to-talk key. (Omarchy uses
-# Right Alt, but Superwhisper for Windows never sees Right Alt, so the press falls through
-# to the focused app and opens its menus. 'AltRight' is migrated from earlier versions.)
-$swExe = Join-Path $env:LOCALAPPDATA 'superwhisper\Superwhisper.exe'
-$swPrefs = Join-Path $env:LOCALAPPDATA 'com.superwhisper.app\preferences.json'
-$swNeedsSetup = $false
-if (-not $NoDictation -and (Test-Path $swExe)) {
-    Step 'Setting up dictation (Superwhisper)'
-    if (Test-Path $swPrefs) {
-        $sw = Get-Content $swPrefs -Raw | ConvertFrom-Json
-        if ($sw.pushToTalkShortcut -in 'Control+Space', 'AltRight') {
-            # Superwhisper rewrites this file on exit, so it must be closed while we edit.
-            Get-Process Superwhisper -ErrorAction SilentlyContinue | Stop-Process -Force
-            Start-Sleep -Seconds 1
-            Copy-Item $swPrefs "$swPrefs.bak-$stamp"
-            $sw.pushToTalkShortcut = 'ControlRight'
-            $sw.p2t = $true
-            $sw.launchAtLogin = $true
-            Write-Utf8 $swPrefs (($sw | ConvertTo-Json -Depth 10) + "`n")
-            Start-Process $swExe
-            Note 'push to talk: hold Right Ctrl (tap to toggle); Superwhisper starts at sign-in'
-        } else {
-            Note "push to talk is already $($sw.pushToTalkShortcut); leaving it"
+# --- 7. Dictation: Handy push-to-talk on Right Ctrl ----------------------------------------
+# Handy (https://github.com/cjpais/Handy) is free, open source and transcribes on your PC. It
+# writes settings_store.json during its first-run setup. Once that exists, this puts
+# push-to-talk on Right Ctrl (unless you already picked your own key) and makes Handy
+# start hidden at sign-in. Omarchy uses Right Alt, but on Windows a held Right Alt also
+# reaches the focused app and opens its menus; Right Ctrl does nothing on its own.
+
+# Edits Handy's settings file; returns what changed (empty if nothing needed changing).
+function Update-HandySettings([string]$Path) {
+    $store = Get-Content $Path -Raw | ConvertFrom-Json
+    $s = $store.settings
+    $changed = @()
+    if ($s.bindings.transcribe.current_binding -eq $s.bindings.transcribe.default_binding) {
+        $s.bindings.transcribe.current_binding = 'ctrl_right'
+        $s | Add-Member -NotePropertyName shortcut_activation -NotePropertyValue 'push_to_talk' -Force
+        $changed += 'push-to-talk on Right Ctrl'
+    }
+    if (-not $s.autostart_enabled) {
+        $s | Add-Member -NotePropertyName autostart_enabled -NotePropertyValue $true -Force
+        $s | Add-Member -NotePropertyName start_hidden -NotePropertyValue $true -Force
+        $changed += 'starts hidden at sign-in'
+    }
+    if ($changed.Count) { Write-Utf8 $Path (($store | ConvertTo-Json -Depth 20) + "`n") }
+    return $changed
+}
+
+$handyExe = Join-Path $env:LOCALAPPDATA 'Handy\handy.exe'
+$handySettings = Join-Path $env:APPDATA 'com.pais.handy\settings_store.json'
+$handyNeedsSetup = $false
+if (-not $NoDictation -and (Test-Path $handyExe)) {
+    Step 'Setting up dictation (Handy)'
+    if (Test-Path $handySettings) {
+        # Handy rewrites its settings on exit, so close it while editing, then reopen it
+        # (it registers its own sign-in entry when it starts with autostart enabled).
+        $wasRunning = [bool](Get-Process handy -ErrorAction SilentlyContinue)
+        Get-Process handy -ErrorAction SilentlyContinue | Stop-Process -Force
+        Start-Sleep -Seconds 1
+        Copy-Item $handySettings "$handySettings.bak-$stamp"
+        $changed = Update-HandySettings $handySettings
+        if ($changed.Count) { Note ('Handy: ' + ($changed -join ', ')) } else {
+            Remove-Item "$handySettings.bak-$stamp"
+            $key = (Get-Content $handySettings -Raw | ConvertFrom-Json).settings.bindings.transcribe.current_binding
+            Note "Handy is already set up (push-to-talk: $key); leaving it"
         }
+        if ($changed.Count -or $wasRunning) { Start-Process $handyExe }
     } else {
-        $swNeedsSetup = $true
-        Note 'Superwhisper has not been set up yet (see the note at the end)'
+        $handyNeedsSetup = $true
+        Note 'Handy has not been set up yet (see the note at the end)'
     }
 }
 
@@ -259,8 +278,8 @@ Write-Host '  Super+Alt+Space  menu: search and arrow to anything'
 Write-Host '  Super+K          every keybinding'
 Write-Host '  Super+Shift+P    pause tiling if you need to get out of the way'
 Write-Host "  Customise: $configDir\config.yaml and $dest\menu.json"
-if ($swNeedsSetup) {
+if ($handyNeedsSetup) {
     Write-Host ''
-    Write-Host 'Dictation: open superwhisper from Super+Space and finish its setup (pick a local model),'
-    Write-Host 'then re-run this installer to put push-to-talk on Right Ctrl.'
+    Write-Host 'Dictation: open Handy from Super+Space and finish its setup (pick a model, allow the'
+    Write-Host 'microphone), then re-run this installer to put push-to-talk on Right Ctrl.'
 }

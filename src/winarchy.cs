@@ -598,7 +598,7 @@ static class Program
         // Shortcuts that belong to Windows or PowerToys rather than GlazeWM.
         string[,] extra =
         {
-            { "Dictation (Superwhisper): hold to talk, tap to toggle", "Right Ctrl" },
+            { "Dictation (Handy): hold to talk, release to paste", "Right Ctrl" },
             { "Start menu", "Ctrl + Esc" },
             { "Lock screen", "Super + L" },
             { "Clipboard history", "Super + V" },
