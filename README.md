@@ -108,6 +108,8 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 
 ## Top bar
 
+The bar sits on the main monitor only (each extra bar costs over 100 MB of memory) and reserves its strip there, so windows tile below it. Its workspace numbers are the main monitor's; Super+6 to 9 still switch the others. To show it on every monitor, set `"monitorSelection": { "type": "all" }` in `~\.glzr\zebar\winarchy\zpack.json` and raise GlazeWM's top `outer_gap`.
+
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
 - **AI usage** (Claude Code, Codex): see [AI usage and accounts](#ai-usage-and-accounts).
 - **Workspace numbers** switch workspaces when clicked.
