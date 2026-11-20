@@ -72,7 +72,25 @@
             return !o;
           });
         }
-        const icons = systray.icons || [];
+        // Apps that crash or are killed never remove their icon, and Zebar keeps it. Every 30 s
+        // (and when the tray opens) send each icon a no-op "pointer left" message: Zebar refuses
+        // it when the app's window is gone, and those ghosts are hidden. A live app that reuses
+        // the same icon shows up again on the next check.
+        const [dead, setDead] = useState(() => new Set());
+        const allIcons = systray.icons || [];
+        const idsKey = allIcons.map(i => i.id).join('|');
+        useEffect(() => {
+          let stopped = false;
+          async function prune() {
+            const ids = (systray.icons || []).map(i => i.id);
+            const results = await Promise.allSettled(ids.map(id => systray.onHoverLeave(id)));
+            if (!stopped) setDead(new Set(ids.filter((id, n) => results[n].status === 'rejected')));
+          }
+          prune();
+          const timer = setInterval(prune, 30000);
+          return () => { stopped = true; clearInterval(timer); };
+        }, [idsKey, open]);
+        const icons = allIcons.filter(i => !dead.has(i.id));
         if (!icons.length) return null;
         return (
           <div className={`tray ${open ? 'open' : ''}`}>
@@ -250,7 +268,7 @@
               const level = peak == null ? 'unknown' : peak >= p.threshold ? 'high' : peak >= p.threshold - 20 ? 'mid' : 'low';
               return (
                 <span key={p.id} className={`agent ${level}`}>
-                  {p.name[0]} {peak == null ? '-' : `${Math.round(peak)}%`}
+                  {p.name} {peak == null ? '-' : `${Math.round(peak)}%`}
                   {p.accounts.length > 1 ? <sup>{p.accounts.indexOf(a) + 1}</sup> : null}
                 </span>
               );

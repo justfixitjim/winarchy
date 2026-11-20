@@ -129,7 +129,7 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
 
 ## AI usage and accounts
 
-Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`C 42%  X 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, a star for your preferred account, the auto-switch toggle, and Add account. It shows the last numbers instantly and only re-checks when they're a few minutes old.
+Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`Claude 42%  Codex 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, a star for your preferred account, the auto-switch toggle, and Add account. It shows the last numbers instantly and only re-checks when they're a few minutes old.
 
 - **Several accounts:** menu → AI → Claude Code (or Codex) → **Add account** opens a sign-in window. Sign in with the other account; the bar then shows both.
 - **Switch account** moves the next account in. For Claude Code, winarchy swaps which sign-in `~\.claude` holds, so new and running `claude` sessions follow. For Codex, new terminals get that account (through `CODEX_HOME`); history, prompts and settings are shared between accounts.
@@ -198,7 +198,7 @@ This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replace
 
 - GlazeWM 3.10.1 can't parse quoted program paths in `shell-exec`, so the config writes paths unquoted. Spaces in them are fine.
 - GlazeWM only tiles windows running as administrator if it runs as administrator too.
-- Tray icons live in the bar's collapsible tray (click the `‹ count`); right-click one for the app's own menu.
+- Tray icons live in the bar's collapsible tray (click the `‹ count`); right-click one for the app's own menu. Icons left behind by apps that crashed or were killed disappear within 30 seconds.
 
 ## Roadmap
 
