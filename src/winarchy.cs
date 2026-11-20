@@ -24,6 +24,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Text;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -60,6 +61,7 @@ static class Native
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int processId);
     [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(Point pt, uint flags);
@@ -72,13 +74,22 @@ class MenuForm : Form
 {
     // Colours of the current theme (~\.glzr\winarchy\theme.json, written by tools\theme.ps1),
     // falling back to Tokyo Night (Omarchy's default).
-    static readonly Color Bg = ThemeColor("background", "#1a1b26");
-    static readonly Color InputBg = ThemeColor("surface", "#16161e");
-    static readonly Color Fg = ThemeColor("foreground", "#c0caf5");
-    static readonly Color Dim = ThemeColor("muted", "#565f89");
-    static readonly Color Accent = ThemeColor("accent", "#7aa2f7");
-    static readonly Color SelBg = ThemeColor("selection", "#283457");
-    static readonly Color Warn = ThemeColor("red", "#f7768e");
+    static Color Bg = ThemeColor("background", "#1a1b26");
+    static Color InputBg = ThemeColor("surface", "#16161e");
+    static Color Fg = ThemeColor("foreground", "#c0caf5");
+    static Color Dim = ThemeColor("muted", "#565f89");
+    static Color Accent = ThemeColor("accent", "#7aa2f7");
+    static Color SelBg = ThemeColor("selection", "#283457");
+    static Color Warn = ThemeColor("red", "#f7768e");
+
+    public static void LoadTheme()
+    {
+        themeColors = null;
+        Bg = ThemeColor("background", "#1a1b26"); InputBg = ThemeColor("surface", "#16161e");
+        Fg = ThemeColor("foreground", "#c0caf5"); Dim = ThemeColor("muted", "#565f89");
+        Accent = ThemeColor("accent", "#7aa2f7"); SelBg = ThemeColor("selection", "#283457");
+        Warn = ThemeColor("red", "#f7768e");
+    }
 
     static Dictionary<string, object> themeColors;
     static Color ThemeColor(string name, string fallback)
@@ -174,11 +185,11 @@ class MenuForm : Form
 
     static string PickFont(params string[] names)
     {
-        using (var fonts = new InstalledFontCollection())
-        {
-            var have = new HashSet<string>(fonts.Families.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
-            foreach (var n in names) if (have.Contains(n)) return n;
-        }
+        // Asking for each font is much faster than listing every installed font:
+        // GDI+ substitutes a different family when one is missing.
+        foreach (var n in names)
+            using (var f = new Font(n, 10f))
+                if (string.Equals(f.Name, n, StringComparison.OrdinalIgnoreCase)) return n;
         return "Consolas";
     }
 
@@ -212,6 +223,9 @@ class MenuForm : Form
     }
 
     // ── Rows ────────────────────────────────────────────────────────────
+
+    // Open windows arrive just after the menu opens; only a search shows them.
+    public void Refilter() { if (input.Text.Length > 0) Refill(); }
 
     void Refill()
     {
@@ -441,11 +455,21 @@ class MenuForm : Form
 static class Program
 {
     static string Dir { get { return Path.GetDirectoryName(Application.ExecutablePath); } }
+
+    static readonly bool Tracing = Environment.GetEnvironmentVariable("WINARCHY_TRACE") == "1";
+    public static void Trace(string what)
+    {
+        if (!Tracing) return;
+        double ms = (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+        try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winarchy-trace.log"), string.Format("{0,7:0} ms  {1}\r\n", ms, what)); } catch { }
+    }
+
     static string GlazeCli { get { return Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\GlazeWM\cli\glazewm.exe"); } }
 
     [STAThread]
     static void Main(string[] args)
     {
+        Trace("main");
         string first = args.Length > 0 ? args[0].ToLowerInvariant() : "";
         if (first == "taskbar")
         {
@@ -460,6 +484,11 @@ static class Program
             if (Prepared == null) return;  // launched fine; otherwise show the install offer
             args = new[] { "prepared" };
         }
+
+        if (first == "--resident") { RunResident(); return; }
+        string request = args.Length > 0 ? args[0] : "";
+        if (request != "prepared" && SendToResident(request)) { Trace("handed to resident"); return; }
+        if (request != "prepared") StartResident();
 
         bool created;
         using (var mutex = new Mutex(true, @"Local\winarchy-menu", out created))
@@ -507,6 +536,16 @@ static class Program
 
     static bool ShowOnce(string mode)
     {
+        var form = BuildForm(mode);
+        if (form == null) return false;
+        Application.Run(form);
+        openForm = null;
+        return true;
+    }
+
+    static Form BuildForm(string mode)
+    {
+        MenuForm.LoadTheme();
         Node root, start;
         bool keys = mode == "keys";
         IsLauncher = !keys && mode != "prepared";
@@ -536,20 +575,116 @@ static class Program
         catch (Exception ex)
         {
             MessageBox.Show(ex.Message, "winarchy", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return false;
+            return null;
         }
 
         Point cursor = Cursor.Position;
         uint dx = 96, dy = 96;
         try { Native.GetDpiForMonitor(Native.MonitorFromPoint(cursor, 2), 0, out dx, out dy); } catch { }
+        Trace("menu built");
         var form = new MenuForm(root, start, keys, dx / 96f);
+        Trace("form created");
         Rectangle wa = Screen.FromPoint(cursor).WorkingArea;
         form.Location = new Point(wa.X + (wa.Width - form.Width) / 2, wa.Y + (int)((wa.Height - form.Height) * 0.38));
         openForm = form;
-        if (IsLauncher) form.Shown += delegate { Launcher.RefreshCacheInBackground(); };
-        Application.Run(form);
-        openForm = null;
-        return true;
+        form.Shown += delegate { Trace("shown"); };
+        if (IsLauncher) form.Shown += delegate { Launcher.RefreshCacheInBackground(); AddOpenWindows(root); };
+        return form;
+    }
+
+    // ── Resident menu ───────────────────────────────────────────────────
+    // A copy of winarchy stays running (hidden, already loaded), so Super+Space only has to
+    // show a window instead of starting .NET and reading everything from scratch.
+
+    const string PipeName = "winarchy-menu";
+
+    static bool SendToResident(string mode)
+    {
+        Mutex m;
+        if (!Mutex.TryOpenExisting(@"Local\winarchy-resident", out m)) return false;
+        m.Dispose();
+        try
+        {
+            Native.AllowSetForegroundWindow(-1); // let the resident copy take focus
+            using (var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.Out))
+            {
+                pipe.Connect(300);
+                var bytes = Encoding.UTF8.GetBytes(mode + "\n");
+                pipe.Write(bytes, 0, bytes.Length);
+                pipe.Flush();
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    static void StartResident()
+    {
+        Mutex m;
+        if (Mutex.TryOpenExisting(@"Local\winarchy-resident", out m)) { m.Dispose(); return; }
+        try { Process.Start(new ProcessStartInfo(Application.ExecutablePath, "--resident") { UseShellExecute = false }); } catch { }
+    }
+
+    static Control residentUi;
+
+    static void RunResident()
+    {
+        bool created;
+        var mutex = new Mutex(true, @"Local\winarchy-resident", out created);
+        if (!created) return;
+        try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch { }
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        residentUi = new Control();
+        residentUi.CreateControl();
+        var handle = residentUi.Handle;
+
+        var listener = new Thread(() =>
+        {
+            while (true)
+            {
+                try
+                {
+                    using (var pipe = new NamedPipeServerStream(PipeName, PipeDirection.In, 1))
+                    {
+                        pipe.WaitForConnection();
+                        string mode = new StreamReader(pipe, Encoding.UTF8).ReadLine() ?? "";
+                        residentUi.BeginInvoke((MethodInvoker)delegate { OnResidentRequest(mode); });
+                    }
+                }
+                catch { Thread.Sleep(200); }
+            }
+        });
+        listener.IsBackground = true;
+        listener.Start();
+
+        // Warm up once (loads and compiles the code paths) so even the first Super+Space is quick.
+        residentUi.BeginInvoke((MethodInvoker)delegate
+        {
+            try { using (var f = BuildForm("")) { } openForm = null; } catch { }
+        });
+        Application.Run();
+        GC.KeepAlive(mutex);
+    }
+
+    static void OnResidentRequest(string mode)
+    {
+        var open = openForm;
+        if (open != null) { open.Close(); return; } // hotkey pressed while open: close it
+        ShowResident(mode);
+    }
+
+    static void ShowResident(string mode)
+    {
+        var form = BuildForm(mode);
+        if (form == null) return;
+        form.FormClosed += delegate
+        {
+            if (openForm == form) openForm = null;
+            form.Dispose();
+            if (NextMode != null) { string next = NextMode; NextMode = null; ShowResident(next); }
+        };
+        form.Show();
     }
 
     public static Node FindById(Node n, string id)
@@ -675,11 +810,22 @@ static class Program
         Node root;
         try { root = LoadMenu(); }
         catch { root = new Node { Label = "winarchy", Items = new List<Node>() }; }
+        Trace("menu.json loaded");
 
         var uris = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         CollectRuns(root, uris);
         FillProviders(root, uris);
+        Trace("apps and settings added");
 
+        windowsQuery = System.Threading.Tasks.Task.Run(() => QueryWindows());
+        return root;
+    }
+
+    static System.Threading.Tasks.Task<List<string[]>> windowsQuery;
+
+    static List<string[]> QueryWindows()
+    {
+        var found = new List<string[]>();
         try
         {
             var psi = new ProcessStartInfo(GlazeCli, "query windows")
@@ -697,12 +843,33 @@ static class Program
                     var w = (Dictionary<string, object>)o;
                     string title = w["title"] as string, proc = w["processName"] as string;
                     if (string.IsNullOrEmpty(title) || proc == "winarchy") continue;
-                    root.Items.Add(new Node { Label = title, Hint = "Window \u00b7 " + proc, Builtin = "focus:" + w["id"], Key = "win:" + proc, Hidden = true, Parent = root });
+                    found.Add(new[] { title, proc, Convert.ToString(w["id"]) });
                 }
             }
         }
         catch { }
-        return root;
+        return found;
+    }
+
+    static void AddOpenWindows(Node root)
+    {
+        var q = windowsQuery;
+        var form = openForm;
+        if (q == null || form == null) return;
+        q.ContinueWith(t =>
+        {
+            try
+            {
+                form.BeginInvoke((MethodInvoker)delegate
+                {
+                    foreach (var w in t.Result)
+                        root.Items.Add(new Node { Label = w[0], Hint = "Window \u00b7 " + w[1], Builtin = "focus:" + w[2], Key = "win:" + w[1], Hidden = true, Parent = root });
+                    var mf = form as MenuForm;
+                    if (mf != null) mf.Refilter();
+                });
+            }
+            catch { }
+        });
     }
 
     static void CollectRuns(Node n, HashSet<string> uris)
