@@ -129,11 +129,12 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
 
 ## AI usage and accounts
 
-Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`C 42%  X 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, the auto-switch toggle, and Add account.
+Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`C 42%  X 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, a star for your preferred account, the auto-switch toggle, and Add account. It shows the last numbers instantly and only re-checks when they're a few minutes old.
 
 - **Several accounts:** menu → AI → Claude Code (or Codex) → **Add account** opens a sign-in window. Sign in with the other account; the bar then shows both.
 - **Switch account** moves the next account in. For Claude Code, winarchy swaps which sign-in `~\.claude` holds, so new and running `claude` sessions follow. For Codex, new terminals get that account (through `CODEX_HOME`); history, prompts and settings are shared between accounts.
 - **Auto-switch at 90%:** when the active account passes 90% of a limit, new sessions move to the account with the most headroom, with a notification. **Alert only** (the default) just notifies.
+- **Preferred account** (the star in the AI panel): the account you want to be on. Starring an account switches to it if it has room. When auto-switch moves you off it near a limit, it moves you back as soon as that account's limits reset.
 - Usage is checked every few minutes, the way Claude Code's `/usage` and Codex itself read it. Sign-ins stay in their own folders and never leave the PC.
 - The Claude **desktop app** keeps its own sign-in and isn't switched, but its usage still shows, because limits belong to the account.
 - From a terminal: `~\.glzr\winarchy\tools\agents.ps1 status` (also `add`, `use`, `list`, `remove`, `mode`).

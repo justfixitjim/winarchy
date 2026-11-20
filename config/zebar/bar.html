@@ -202,10 +202,15 @@
       function Agents() {
         const [data, setData] = useState(null);
 
+        // Read the script's cache directly (cheap); start PowerShell only when it's a few minutes old.
+        const cache = AGENTS.replace(/tools\\agents\.ps1$/i, 'agents\\usage.json');
         async function refresh() {
           try {
-            const out = await zebar.shellExec('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', AGENTS, 'usage']);
-            const text = out.stdout.trim();
+            let text = (await zebar.shellExec('cmd.exe', ['/c', 'type', cache]).catch(() => ({ stdout: '' }))).stdout.trim();
+            const updated = text ? JSON.parse(text).updated : null;
+            if (!updated || Date.now() - new Date(updated) > 4 * 60 * 1000) {
+              text = (await zebar.shellExec('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', AGENTS, 'usage'])).stdout.trim();
+            }
             if (text) setData(JSON.parse(text));
           } catch (err) {
             console.error(err);

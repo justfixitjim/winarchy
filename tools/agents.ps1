@@ -7,6 +7,8 @@
 #   agents.ps1 list [claude|codex]
 #   agents.ps1 remove <claude|codex> <id>
 #   agents.ps1 mode <claude|codex> <manual|auto> [threshold]
+#   agents.ps1 prefer <claude|codex> <id>  the account to be on; auto-switch returns to it
+#                                          once its limits reset
 #
 # Claude: every session starts in ~\.claude, which holds the login of the "seated" account;
 # the other logins wait in ~\.glzr\winarchy\agents\claude\<id>. Switching swaps the
@@ -86,11 +88,15 @@ function Load-Registry($prov) {
     if (Test-Path $p) {
         $reg = Read-Text $p | ConvertFrom-Json
         $reg.accounts = @($reg.accounts)
+        # Added later: the preferred account, and whether auto-switch moved us off it.
+        if (-not $reg.PSObject.Properties['preferred']) { $reg | Add-Member preferred 'main' }
+        if (-not $reg.PSObject.Properties['autoAway']) { $reg | Add-Member autoAway $false }
+        if (-not (Find-Account $reg $reg.preferred)) { $reg.preferred = 'main' }
         return $reg
     }
     $id = Get-Identity $prov $(if ($prov -eq 'claude') { $claudePrimary } else { $codexPrimary }) $true
     $reg = [pscustomobject]@{
-        active = 'main'; seated = 'main'; mode = 'manual'; threshold = 90; alert = ''
+        active = 'main'; seated = 'main'; preferred = 'main'; autoAway = $false; mode = 'manual'; threshold = 90; alert = ''
         accounts = @([pscustomobject]@{ id = 'main'; label = $(if ($id.email) { $id.email } else { 'main' }); primary = $true })
     }
     Save-Registry $prov $reg
@@ -276,7 +282,7 @@ function Update-Usage {
             $dir = Login-Dir $prov $reg $acct
             $u = try { if ($prov -eq 'claude') { Get-ClaudeUsage $dir } else { Get-CodexUsage $dir } } catch { @{ status = "Error: $($_.Exception.Message)" } }
             $prev = if ($prevProv) { $prevProv.accounts | Where-Object { $_.id -eq $acct.id } } else { $null }
-            $rec = [ordered]@{ id = $acct.id; label = $acct.label; active = ($acct.id -eq $reg.active); status = $u.status; stale = $false
+            $rec = [ordered]@{ id = $acct.id; label = $acct.label; active = ($acct.id -eq $reg.active); preferred = ($acct.id -eq $reg.preferred); status = $u.status; stale = $false
                 plan = $(if ($u.plan) { $u.plan } elseif ($prev) { $prev.plan } else { '' }); session = $u.session; weekly = $u.weekly }
             if ($u.status -ne 'ok' -and $prev -and ($prev.session -or $prev.weekly)) {
                 # Keep the last known numbers, marked stale.
@@ -296,6 +302,15 @@ function Update-Usage {
 # in manual mode say so once.
 function Invoke-AutoSwitch($prov, $reg, $accounts) {
     if ($reg.accounts.Count -lt 2) { return }
+    # Auto-switch moved us off the preferred account: go back once its limits have reset.
+    if ($reg.autoAway -and $reg.active -ne $reg.preferred -and $reg.mode -eq 'auto') {
+        $pref = $accounts | Where-Object { $_.id -eq $reg.preferred }
+        if ($pref -and $null -ne $pref.peak -and $pref.peak -lt $reg.threshold) {
+            Use-Account $prov $pref.id -Quiet
+            Show-Toast "$($names[$prov]) is back on $($pref.label)" "Its limits reset ($([int]$pref.peak)% used). New sessions use it again."
+            return
+        }
+    }
     $cur = $accounts | Where-Object { $_.id -eq $reg.active }
     if (-not $cur -or $null -eq $cur.peak -or $cur.peak -lt $reg.threshold) {
         if ($reg.alert) { $reg.alert = ''; Save-Registry $prov $reg }
@@ -310,7 +325,7 @@ function Invoke-AutoSwitch($prov, $reg, $accounts) {
     $name = $names[$prov]
     if (-not $target) { Show-Toast "All $name accounts are over $($reg.threshold)%" "Staying on $($cur.label)."; return }
     if ($reg.mode -eq 'auto') {
-        Use-Account $prov $target.id -Quiet
+        Use-Account $prov $target.id -Quiet -Auto
         Show-Toast "$name switched to $($target.label)" "$($cur.label) is at $([int]$cur.peak)%. New sessions use $($target.label)."
     } else {
         Show-Toast "$name ($($cur.label)) at $([int]$cur.peak)%" "Switch to $($target.label) ($([int]$target.peak)%): menu > AI > $name > Switch account."
@@ -331,7 +346,7 @@ function Move-ClaudeLogin($fromDir, $toDir) {
     Write-Dict $toProfPath $toProf
 }
 
-function Use-Account($prov, $target, [switch]$Quiet) {
+function Use-Account($prov, $target, [switch]$Quiet, [switch]$Auto) {
     $reg = Load-Registry $prov
     if (-not $target -or $target -eq 'next') {
         $i = [array]::IndexOf(@($reg.accounts.id), $reg.active)
@@ -367,6 +382,8 @@ function Use-Account($prov, $target, [switch]$Quiet) {
     }
     $reg.active = $acct.id
     $reg.alert = ''
+    # Only an automatic move away from the preferred account is undone automatically.
+    $reg.autoAway = [bool]($Auto -and $acct.id -ne $reg.preferred)
     Save-Registry $prov $reg
     if (-not $Quiet) {
         $how = if ($prov -eq 'claude') { 'New and running claude sessions' } else { 'New Codex terminals' }
@@ -490,6 +507,28 @@ switch ($Command) {
     'finish' { Assert-Provider; Complete-SignIn $Provider $Arg1 }
     'use' { Assert-Provider; Use-Account $Provider $Arg1; Remove-Item $usagePath -ErrorAction SilentlyContinue }
     'remove' { Assert-Provider; Remove-Account $Provider $Arg1 }
+    'prefer' {
+        Assert-Provider
+        $reg = Load-Registry $Provider
+        $acct = Find-Account $reg $Arg1
+        if (-not $acct) { throw "No $($names[$Provider]) account '$Arg1'." }
+        $reg.preferred = $acct.id
+        Save-Registry $Provider $reg
+        # Move to it now if it has room; otherwise come back to it when its limits reset.
+        $peak = $null
+        if (Test-Path $usagePath) {
+            $u = Read-Text $usagePath | ConvertFrom-Json
+            $rec = (($u.providers | Where-Object { $_.id -eq $Provider }).accounts | Where-Object { $_.id -eq $acct.id })
+            if ($rec) { $peak = Get-Peak $rec }
+        }
+        if ($reg.active -eq $acct.id) { Show-Toast "$($names[$Provider]) preferred account" "$($acct.label)." }
+        elseif ($null -eq $peak -or $peak -lt $reg.threshold) { Use-Account $Provider $acct.id }
+        else {
+            $reg = Load-Registry $Provider; $reg.autoAway = $true; Save-Registry $Provider $reg
+            Show-Toast "$($names[$Provider]) preferred account: $($acct.label)" "It's at $([int]$peak)%, so you stay on the current account until it resets."
+        }
+        Remove-Item $usagePath -ErrorAction SilentlyContinue
+    }
     'mode' {
         Assert-Provider
         $reg = Load-Registry $Provider
@@ -500,5 +539,5 @@ switch ($Command) {
         $msg = if ($reg.mode -eq 'auto') { "switches new sessions to the account with the most headroom at $($reg.threshold)%." } else { "notifies at $($reg.threshold)% and switches when you say so." }
         Show-Toast "$($names[$Provider]) accounts" "$($names[$Provider]) $msg"
     }
-    default { throw "Unknown command '$Command'. Commands: usage, status, add, use, list, remove, mode." }
+    default { throw "Unknown command '$Command'. Commands: usage, status, add, use, prefer, list, remove, mode." }
 }

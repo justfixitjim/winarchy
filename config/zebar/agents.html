@@ -3,25 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- winarchy AI panel: opened from the bar's AI usage readout. Colours come from theme.css. -->
+    <!-- winarchy AI panel: opened from the bar's AI usage readout. Colours come from theme.css.
+         Plain JavaScript (htm templates, no in-browser compiling) so it opens quickly. -->
     <link rel="stylesheet" type="text/css" href="./panel.css" />
-    <script
-      src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"
-      integrity="sha256-aS0B0wnsaDByLfE16h4MDCP1fQFccysd1YWOcV+gbBo="
-      crossorigin="anonymous"
-    ></script>
   </head>
   <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
+    <script type="module">
       import React, { useState, useEffect } from 'https://esm.sh/react@18.3.1';
       import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+      import htm from 'https://esm.sh/htm@3.1.1';
       import * as zebar from 'https://esm.sh/zebar@3.3.1';
+
+      const html = htm.bind(React.createElement);
 
       // winarchy's AI usage script. install.ps1 fills in the path.
       const AGENTS = '{{AGENTS_PS1}}';
       const PS = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', AGENTS];
+      // The script's cache, read directly (much faster than starting PowerShell).
+      const CACHE = AGENTS.replace(/tools\\agents\.ps1$/i, 'agents\\usage.json');
+      const FRESH_MS = 4 * 60 * 1000;
 
       const close = () => zebar.currentWidget().close();
       window.addEventListener('blur', close);
@@ -35,29 +37,55 @@
         return d >= 1 ? `resets in ${d}d ${h % 24}h` : h >= 1 ? `resets in ${h}h ${m % 60}m` : `resets in ${m}m`;
       }
 
-      function Bar({ title, win, threshold }) {
+      function Limit({ title, win, threshold }) {
         if (!win) return null;
         const pct = Math.max(0, Math.min(100, win.pct));
         const level = pct >= threshold ? 'high' : pct >= threshold - 20 ? 'mid' : 'low';
-        return (
-          <div className="limit">
-            <div className="limit-head"><span>{title}</span><span>{Math.round(pct)}%</span></div>
-            <div className="track"><div className={`fill ${level}`} style={{ width: `${pct}%` }}></div>
-              <div className="mark" style={{ left: `${threshold}%` }}></div></div>
-            <div className="reset">{countdown(win.resetsAt)}</div>
-          </div>
-        );
+        return html`
+          <div class="limit">
+            <div class="limit-head"><span>${title}</span><span>${Math.round(pct)}%</span></div>
+            <div class="track">
+              <div class=${`fill ${level}`} style=${{ width: `${pct}%` }}></div>
+              <div class="mark" style=${{ left: `${threshold}%` }}></div>
+            </div>
+            <div class="reset">${countdown(win.resetsAt)}</div>
+          </div>`;
+      }
+
+      function Account({ p, a, act }) {
+        return html`
+          <div class=${`account ${a.active ? 'active' : ''}`}>
+            <div class="account-head">
+              <button
+                class=${`star ${a.preferred ? 'on' : ''}`}
+                title=${a.preferred ? 'Preferred account: auto-switch comes back to it when its limits reset' : 'Make this the preferred account'}
+                onClick=${() => !a.preferred && act(`Preferring ${a.label}...`, ['prefer', p.id, a.id])}
+              ><i class=${`nf ${a.preferred ? 'nf-md-star' : 'nf-md-star_outline'}`}></i></button>
+              <span class="label" title=${a.active ? 'New sessions use this account' : ''}>${a.label}</span>
+              <span class="plan">${a.plan}</span>
+              ${a.active
+                ? html`<span class="in-use">in use</span>`
+                : html`<button class="use" onClick=${() => act(`Switching to ${a.label}...`, ['use', p.id, a.id])}>Use</button>`}
+            </div>
+            <${Limit} title="5 hours" win=${a.session} threshold=${p.threshold} />
+            <${Limit} title="Week" win=${a.weekly} threshold=${p.threshold} />
+            ${(a.status !== 'ok' || a.stale) && html`
+              <div class="note">${a.stale ? 'Last known numbers. ' : ''}${a.status !== 'ok' ? a.status : ''}</div>`}
+          </div>`;
       }
 
       function App() {
         const [data, setData] = useState(null);
         const [busy, setBusy] = useState('');
 
-        async function load(refresh) {
-          setBusy(refresh ? 'Checking usage...' : '');
+        const show = text => { if (text && text.trim()) setData(JSON.parse(text.trim())); };
+
+        // Ask the script: it re-checks usage if its numbers are a few minutes old (or on request).
+        async function refresh(force) {
+          setBusy(force ? 'Checking usage...' : '');
           try {
-            const out = await zebar.shellExec('powershell.exe', [...PS, 'usage', ...(refresh ? ['-Refresh'] : [])]);
-            if (out.stdout.trim()) setData(JSON.parse(out.stdout.trim()));
+            const out = await zebar.shellExec('powershell.exe', [...PS, 'usage', ...(force ? ['-Refresh'] : [])]);
+            show(out.stdout);
           } catch (err) { console.error(err); }
           setBusy('');
         }
@@ -65,60 +93,48 @@
         async function act(label, args) {
           setBusy(label);
           try { await zebar.shellExec('powershell.exe', [...PS, ...args]); } catch (err) { console.error(err); }
-          await load(true);
+          await refresh(true);
         }
 
-        useEffect(() => { load(false); }, []);
+        useEffect(() => {
+          // Show the cached numbers at once, then refresh only if they're old.
+          zebar.shellExec('cmd.exe', ['/c', 'type', CACHE]).then(out => {
+            show(out.stdout);
+            const updated = JSON.parse(out.stdout.trim() || '{}').updated;
+            if (!updated || Date.now() - new Date(updated) > FRESH_MS) refresh(false);
+          }).catch(() => refresh(false));
+        }, []);
 
         const providers = data?.providers || [];
-        return (
-          <div className="panel">
-            <div className="panel-head">
-              <span className="title">AI usage</span>
-              <button className="link" onClick={() => load(true)} title="Check usage now">
-                <i className="nf nf-md-refresh"></i>
-              </button>
+        return html`
+          <div class="panel">
+            <div class="panel-head">
+              <span class="title">AI usage</span>
+              <button class="link" onClick=${() => refresh(true)} title="Check usage now"><i class="nf nf-md-refresh"></i></button>
             </div>
-            {!data && <div className="note">Loading...</div>}
-            {providers.map(p => (
-              <section key={p.id}>
-                <div className="provider">
-                  <span>{p.name}</span>
+            ${!data && html`<div class="note">Loading...</div>`}
+            ${providers.map(p => html`
+              <section key=${p.id}>
+                <div class="provider">
+                  <span>${p.name}</span>
                   <button
-                    className={`switch ${p.mode === 'auto' ? 'on' : ''}`}
-                    title={p.mode === 'auto' ? `New sessions move to the account with the most headroom at ${p.threshold}%. Click for alert only.` : `Notifies at ${p.threshold}%. Click to switch automatically.`}
-                    onClick={() => act('Saving...', ['mode', p.id, p.mode === 'auto' ? 'manual' : 'auto', String(p.threshold)])}
-                  >
-                    {p.mode === 'auto' ? `Auto-switch at ${p.threshold}%` : `Alert at ${p.threshold}%`}
-                  </button>
+                    class=${`switch ${p.mode === 'auto' ? 'on' : ''}`}
+                    title=${p.mode === 'auto'
+                      ? `Near ${p.threshold}%, new sessions move to the account with the most headroom, and back to the starred account when its limits reset. Click for alert only.`
+                      : `Notifies at ${p.threshold}%. Click to switch automatically.`}
+                    onClick=${() => act('Saving...', ['mode', p.id, p.mode === 'auto' ? 'manual' : 'auto', String(p.threshold)])}
+                  >${p.mode === 'auto' ? `Auto-switch at ${p.threshold}%` : `Alert at ${p.threshold}%`}</button>
                 </div>
-                {p.accounts.map(a => (
-                  <div key={a.id} className={`account ${a.active ? 'active' : ''}`}>
-                    <div className="account-head">
-                      <span className="label">{a.active ? <i className="nf nf-md-check_circle"></i> : null}{a.label}</span>
-                      <span className="plan">{a.plan}</span>
-                      {!a.active && (
-                        <button className="use" onClick={() => act(`Switching to ${a.label}...`, ['use', p.id, a.id])}>Use</button>
-                      )}
-                    </div>
-                    <Bar title="5 hours" win={a.session} threshold={p.threshold} />
-                    <Bar title="Week" win={a.weekly} threshold={p.threshold} />
-                    {(a.status !== 'ok' || a.stale) && (
-                      <div className="note">{a.stale ? 'Last known numbers. ' : ''}{a.status !== 'ok' ? a.status : ''}</div>
-                    )}
-                  </div>
-                ))}
-                <button className="add" onClick={() => { zebar.shellSpawn('powershell.exe', [...PS, 'add', p.id]).catch(console.error); close(); }}>
-                  <i className="nf nf-md-account_plus_outline"></i> Add {p.name} account
+                ${p.accounts.map(a => html`<${Account} key=${a.id} p=${p} a=${a} act=${act} />`)}
+                <button class="add" onClick=${() => { zebar.shellSpawn('powershell.exe', [...PS, 'add', p.id]).catch(console.error); close(); }}>
+                  <i class="nf nf-md-account_plus_outline"></i> Add ${p.name} account
                 </button>
-              </section>
-            ))}
-            {busy && <div className="busy">{busy}</div>}
-          </div>
-        );
+              </section>`)}
+            ${busy && html`<div class="busy">${busy}</div>`}
+          </div>`;
       }
 
-      createRoot(document.getElementById('root')).render(<App />);
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
     </script>
   </body>
 </html>

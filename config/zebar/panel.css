@@ -129,3 +129,12 @@ button {
   margin-top: 2px;
   color: color-mix(in srgb, var(--wa-fg) 65%, transparent);
 }
+
+.star {
+  color: color-mix(in srgb, var(--wa-fg) 40%, transparent);
+  i { margin: 0; }
+  &.on { color: var(--wa-yellow); }
+  &:hover { color: var(--wa-yellow); }
+}
+
+.in-use { color: var(--wa-accent); font-size: 11px; }

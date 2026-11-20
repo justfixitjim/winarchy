@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
   "name": "winarchy",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "winarchy top bar: GlazeWM workspaces, clock, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
   "tags": [
     "topbar",
@@ -51,6 +51,10 @@
           {
             "program": "powershell.exe",
             "argsRegex": ".*agents\\.ps1 usage$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c type \"?[^&|<>^\"]*\\\\\\.glzr\\\\winarchy\\\\agents\\\\usage\\.json\"?$"
           }
         ]
       },
@@ -93,7 +97,11 @@
         "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": ".*agents\\.ps1 (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex))$"
+            "argsRegex": ".*agents\\.ps1 (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|prefer (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex))$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c type \"?[^&|<>^\"]*\\\\\\.glzr\\\\winarchy\\\\agents\\\\usage\\.json\"?$"
           }
         ]
       },
