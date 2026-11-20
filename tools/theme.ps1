@@ -30,9 +30,12 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:USERPROFILE '.glzr\winarchy'
 $themesDir = Join-Path $root 'themes'
 $currentPath = Join-Path $root 'theme.json'
-$stateDir = Join-Path $env:LOCALAPPDATA 'winarchy'
-$backupPath = Join-Path $stateDir 'theme-backup.json'
-$logPath = Join-Path $stateDir 'theme.log'
+$stateDir = Join-Path $env:LOCALAPPDATA 'winarchy'   # generated wallpapers (a cache)
+# The backup lives beside the theme, not in AppData, which packaged apps see a private copy of.
+$backupPath = Join-Path $root 'theme-backup.json'
+$logPath = Join-Path $root 'theme.log'
+$oldBackup = Join-Path $stateDir 'theme-backup.json'
+if (-not (Test-Path $backupPath) -and (Test-Path $oldBackup)) { Move-Item $oldBackup $backupPath }
 $utf8 = New-Object Text.UTF8Encoding $false
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 

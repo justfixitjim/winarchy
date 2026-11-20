@@ -9,7 +9,7 @@
 #   agents.ps1 mode <claude|codex> <manual|auto> [threshold]
 #
 # Claude: every session starts in ~\.claude, which holds the login of the "seated" account;
-# the other logins wait in %LOCALAPPDATA%\winarchy\agents\claude\<id>. Switching swaps the
+# the other logins wait in ~\.glzr\winarchy\agents\claude\<id>. Switching swaps the
 # chosen login into ~\.claude, so new and running `claude` sessions follow (the Claude desktop
 # app has its own sign-in and is not switched). Codex: each extra account has its own
 # CODEX_HOME, sharing sessions, prompts and config with ~\.codex; switching sets CODEX_HOME
@@ -23,12 +23,19 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($Command -eq 'usage' -and -not $Refresh) {
-    $cache = Join-Path $(if ($env:WINARCHY_AGENTS_STATE) { $env:WINARCHY_AGENTS_STATE } else { Join-Path $env:LOCALAPPDATA 'winarchy\agents' }) 'usage.json'
+    $cache = Join-Path $(if ($env:WINARCHY_AGENTS_STATE) { $env:WINARCHY_AGENTS_STATE } else { Join-Path $env:USERPROFILE '.glzr\winarchy\agents' }) 'usage.json'
     if ((Test-Path $cache) -and ((Get-Date) - (Get-Item $cache).LastWriteTime).TotalMinutes -lt 4) { [IO.File]::ReadAllText($cache); return }
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$stateDir = if ($env:WINARCHY_AGENTS_STATE) { $env:WINARCHY_AGENTS_STATE } else { Join-Path $env:LOCALAPPDATA 'winarchy\agents' }
+# State lives in the user profile, not AppData: apps started from a packaged app (MSIX) see a
+# private copy of new AppData folders, so a sign-in terminal could miss files the bar wrote.
+$stateDir = if ($env:WINARCHY_AGENTS_STATE) { $env:WINARCHY_AGENTS_STATE } else { Join-Path $env:USERPROFILE '.glzr\winarchy\agents' }
+$oldState = Join-Path $env:LOCALAPPDATA 'winarchy\agents'
+if (-not $env:WINARCHY_AGENTS_STATE -and -not (Test-Path $stateDir) -and (Test-Path $oldState)) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $stateDir) | Out-Null
+    Move-Item $oldState $stateDir
+}
 $usagePath = Join-Path $stateDir 'usage.json'
 $utf8 = New-Object Text.UTF8Encoding $false
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null

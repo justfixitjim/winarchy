@@ -73,7 +73,7 @@ $pack = Join-Path $zebarDir 'winarchy'
 if (Test-Path $pack) { Remove-Item $pack -Recurse -Force }
 
 $agentsScript = Join-Path $dest 'tools\agents.ps1'
-$agentsState = Join-Path $env:LOCALAPPDATA 'winarchy\agents'
+$agentsState = Join-Path $dest 'agents'
 if ((Test-Path $agentsScript) -and (Test-Path $agentsState)) {
     # Put the main Claude and Codex accounts back in ~\.claude and ~\.codex; extra accounts' sign-ins are removed.
     Step 'Switching Claude Code and Codex back to their main accounts'
