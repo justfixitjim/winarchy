@@ -1092,6 +1092,9 @@ static class Launcher
     // Rescans the Start menu after the launcher opens, so new apps show up next time.
     public static void RefreshCacheInBackground()
     {
+        // At most every 10 minutes: scanning the Start menu costs CPU every time the menu opens.
+        try { if (File.Exists(CachePath) && DateTime.Now - File.GetLastWriteTime(CachePath) < TimeSpan.FromMinutes(10)) return; }
+        catch { }
         var t = new Thread(() => { var fresh = ScanApps(); if (fresh.Count > 0) SaveCache(fresh); }) { IsBackground = true };
         t.SetApartmentState(ApartmentState.STA);
         t.Start();

@@ -22,10 +22,11 @@ param(
     [switch]$Refresh
 )
 $ErrorActionPreference = 'Stop'
+if ($Command -eq 'usage' -and -not $Refresh) {
+    $cache = Join-Path $(if ($env:WINARCHY_AGENTS_STATE) { $env:WINARCHY_AGENTS_STATE } else { Join-Path $env:LOCALAPPDATA 'winarchy\agents' }) 'usage.json'
+    if ((Test-Path $cache) -and ((Get-Date) - (Get-Item $cache).LastWriteTime).TotalMinutes -lt 4) { [IO.File]::ReadAllText($cache); return }
+}
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Add-Type -AssemblyName System.Web.Extensions
-$ser = New-Object Web.Script.Serialization.JavaScriptSerializer
-$ser.MaxJsonLength = [int]::MaxValue
 
 $stateDir = if ($env:WINARCHY_AGENTS_STATE) { $env:WINARCHY_AGENTS_STATE } else { Join-Path $env:LOCALAPPDATA 'winarchy\agents' }
 $usagePath = Join-Path $stateDir 'usage.json'
@@ -43,8 +44,17 @@ $refreshMinutes = 4
 function Read-Text($p) { [IO.File]::ReadAllText($p, $utf8) }
 function Write-Text($p, $t) { [IO.File]::WriteAllText($p, $t, $utf8) }
 # Claude's own files go through a case-sensitive parser and are changed one key at a time.
-function Read-Dict($p) { if (Test-Path $p) { try { return $ser.DeserializeObject((Read-Text $p)) } catch {} }; return $null }
-function Write-Dict($p, $d) { Write-Text $p ($ser.Serialize($d)) }
+$script:ser = $null
+function Get-Serializer {
+    if (-not $script:ser) {
+        Add-Type -AssemblyName System.Web.Extensions
+        $script:ser = New-Object Web.Script.Serialization.JavaScriptSerializer
+        $script:ser.MaxJsonLength = [int]::MaxValue
+    }
+    return $script:ser
+}
+function Read-Dict($p) { if (Test-Path $p) { try { return (Get-Serializer).DeserializeObject((Read-Text $p)) } catch {} }; return $null }
+function Write-Dict($p, $d) { Write-Text $p ((Get-Serializer).Serialize($d)) }
 
 function Show-Toast($title, $body) {
     try {
@@ -160,7 +170,8 @@ function Get-ClaudeUsage($dir) {
 }
 
 # Codex's limits come from its app-server (JSON-RPC over stdin/stdout), as in Omarchy.
-Add-Type -TypeDefinition @'
+# Compiled only when usage is actually checked (the bar's cached reads skip it).
+$codexRpcSource = @'
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -214,6 +225,7 @@ function Get-CodexUsage($dir) {
     if (-not $id.login) { return @{ status = 'Signed out' } }
     $codex = Find-Codex
     if (-not $codex) { return @{ status = 'Codex CLI not found' } }
+    if (-not ('WinarchyCodexRpc' -as [type])) { Add-Type -TypeDefinition $codexRpcSource }
     $line = [WinarchyCodexRpc]::Query($codex, $dir, 25000)
     if (-not $line) { return @{ status = 'Codex did not answer' } }
     $m = $line | ConvertFrom-Json

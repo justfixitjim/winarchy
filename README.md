@@ -7,9 +7,11 @@ It's a thin layer over good existing tools:
 | Omarchy | winarchy |
 |---|---|
 | Hyprland tiling | [GlazeWM](https://github.com/glzr-io/glazewm), with a helper that adds Hyprland-style automatic splits |
-| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, volume, stats, weather in °F); the Windows taskbar is hidden |
+| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, AI usage, tray, VPN, volume, stats, weather in °F); the Windows taskbar is hidden |
 | Walker (Super+Space) and the Omarchy menu | The `winarchy` menu: Omarchy's sections (Apps, Appearance, Trigger, Setup, Install, Remove, Update, Learn, System), searchable across apps, open windows and Settings pages, plus quick maths |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
+| Themes (Super+Ctrl+Shift+Space) | Eight themes that recolour borders, bar, menu, Windows, wallpaper, Terminal, VS Code and Firefox |
+| Agents panel | Claude Code and Codex usage in the bar, several accounts, auto-switching near the limit |
 | Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
 
 ## Install
@@ -183,6 +185,7 @@ This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replace
 ## How it works
 
 - **`winarchy.exe`** is a small WinForms app. It provides the menu, the cheat sheet, and launchers that find your default browser and installed apps through the Start menu's app list, so one config works on any PC.
+- **`tools\*.ps1`** are the media tools, the theme switcher (`theme.ps1`) and the AI accounts tool (`agents.ps1`). The bar runs `agents.ps1 usage`, which answers from a cache and only re-checks usage every few minutes.
 - **`winarchy-daemon.exe`** is started by GlazeWM and does three things:
   - **Start menu blocking.** GlazeWM swallows Super+key combos, which makes Windows think Super was tapped alone and open Start. The daemon injects an unassigned "mask" key (0xE8) when Super goes down, so that never happens.
   - **Taskbar hiding.** It auto-hides the taskbar, then hides it outright.
@@ -192,11 +195,11 @@ This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replace
 
 - GlazeWM 3.10.1 can't parse quoted program paths in `shell-exec`, so the config writes paths unquoted. Spaces in them are fine.
 - GlazeWM only tiles windows running as administrator if it runs as administrator too.
-- With the taskbar hidden, tray icons aren't visible. Use the Taskbar toggle to reach them, or open those apps from the launcher.
+- Tray icons live in the bar's collapsible tray (click the `‹ count`); right-click one for the app's own menu.
 
 ## Roadmap
 
-Planned Omarchy features (automatic theming, an AI usage panel) are specced in [docs/SPEC.md](docs/SPEC.md).
+What's built and what's still open (Chromium theming, a live theme preview, recording with audio) is tracked in [docs/SPEC.md](docs/SPEC.md).
 
 ## License
 

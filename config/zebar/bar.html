@@ -21,8 +21,8 @@
       import React, {
         useState,
         useEffect,
-      } from 'https://esm.sh/react@18?dev';
-      import { createRoot } from 'https://esm.sh/react-dom@18/client?dev';
+      } from 'https://esm.sh/react@18.3.1';
+      import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
       import * as zebar from 'https://esm.sh/zebar@3.3.1';
 
       // Temperature unit for the weather readout: 'F' (Fahrenheit) or 'C' (Celsius).
@@ -148,7 +148,7 @@
 
         useEffect(() => {
           refresh();
-          const timer = setInterval(refresh, 5000);
+          const timer = setInterval(refresh, 15000); // rasdial is quick, but no need to run it constantly
           return () => clearInterval(timer);
         }, []);
 
@@ -214,7 +214,7 @@
 
         useEffect(() => {
           refresh();
-          const timer = setInterval(refresh, 60000);
+          const timer = setInterval(refresh, 120000); // the script itself re-checks every few minutes
           return () => clearInterval(timer);
         }, []);
 
