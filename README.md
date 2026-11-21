@@ -49,7 +49,7 @@ Re-run it any time to upgrade. Options:
 | Super+K | Every keybinding, searchable |
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
 | Super+Ctrl+Shift+Space | Pick a colour theme |
-| Super+Shift+R | Start / stop screen recording |
+| Super+Alt+R | Start / stop screen recording |
 | Super+Enter | Terminal |
 | Super+Shift+B / Super+Shift+Alt+B | Default browser / private window |
 | Super+Shift+F | Explorer |
@@ -100,7 +100,7 @@ Omarchy's little utilities, built on ffmpeg, ImageMagick, ZXing.Net and Windows'
 | Menu item | What it does |
 |---|---|
 | **Trigger › Transcode** | Pick a picture or video, then a format and size; the result is saved next to the original and shown in Explorer. Pictures can become jpg, png, webp or avif at original, 2560, 1920 or 1280 px (it also reads HEIC). Videos can become mp4 at original, 4K, 1080p or 720p, a gif at 720, 480 or 360 px wide, or mp3 audio. |
-| **Trigger › Capture › Screen recording** (Super+Shift+R) | Starts recording the monitor under the mouse; press it again, or click the red REC timer in the bar, to stop. Saves an mp4 to Videos\Screen recordings, using the GPU encoder when there is one. There's no audio yet. |
+| **Trigger › Capture › Screen recording** (Super+Alt+R) | Starts recording the monitor under the mouse; press it again, or click the red REC timer in the bar, to stop. Saves an mp4 to Videos\Screen recordings, using the GPU encoder when there is one. There's no audio yet. |
 | **Trigger › Capture › Text (OCR)** | Snip a region and its text is copied to the clipboard. |
 | **Trigger › Capture › QR code** | Snip a QR code and its contents are copied to the clipboard. |
 | **Setup › Network › Share Wi-Fi as QR code** | Shows the current Wi-Fi network as a QR code that phones scan to join. |

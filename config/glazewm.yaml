@@ -2,7 +2,7 @@
 # https://github.com/justfixitjim/winarchy
 #
 # Super = the left Windows key (lwin). Windows keeps a few Win+key combos for
-# itself (Win+L lock, Win+V clipboard, Win+Shift+S screenshot, Win+E, Win+R,
+# itself (Win+L lock, Win+V clipboard, Win+Shift+S screenshot, Win+Shift+R Snipping Tool recording, Win+E, Win+R,
 # Win+I ...) and those are deliberately left unbound here.
 #
 # The comment directly above each keybinding is what the Super+K cheat sheet
@@ -157,7 +157,7 @@ keybindings:
     bindings: ['lwin+ctrl+shift+space']
   # Screen recording: start / stop (this monitor)
   - commands: ['shell-exec --hide-window powershell -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File %USERPROFILE%/.glzr/winarchy/tools/record.ps1']
-    bindings: ['lwin+shift+r']
+    bindings: ['lwin+alt+r']
   # Power menu (lock, sleep, restart, shut down)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe system']
     bindings: ['lwin+escape']

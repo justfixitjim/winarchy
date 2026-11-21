@@ -1,6 +1,6 @@
 <#
     winarchy: Screen recording toggle (Omarchy's "Trigger > Capture > Screenrecord").
-    Run once to start recording the monitor under the mouse; run again to stop (Super+Shift+R).
+    Run once to start recording the monitor under the mouse; run again to stop (Super+Alt+R).
     While recording, a red tray icon shows; the bar turns it into a REC timer, and clicking
     it also stops the recording.
     Saves to Videos\Screen recordings\winarchy-<date>.mp4 and shows it in Explorer.
@@ -104,7 +104,7 @@ $tray = New-Object System.Windows.Forms.NotifyIcon
 $tray.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
 $tray.Text = 'winarchy recording - click to stop'   # the bar looks for this text
 $tray.Visible = $true
-$tray.ShowBalloonTip(3000, 'Recording', 'Recording this screen. Press Super+Shift+R or click REC in the bar to stop.', [System.Windows.Forms.ToolTipIcon]::None)
+$tray.ShowBalloonTip(3000, 'Recording', 'Recording this screen. Press Super+Alt+R or click REC in the bar to stop.', [System.Windows.Forms.ToolTipIcon]::None)
 
 $script:stopping = $false
 $tray.Add_MouseClick({
