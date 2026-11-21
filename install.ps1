@@ -148,7 +148,7 @@ if (Get-Process glazewm -ErrorAction SilentlyContinue) {
 }
 $daemon = Join-Path $dest 'winarchy-daemon.exe'
 if (Test-Path $daemon) { & $daemon --stop; Start-Sleep -Milliseconds 800 }
-Get-Process winarchy, winarchy-daemon, winarchy-menu, winarchy-autotile -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process winarchy, winarchy-daemon, winarchy-top, winarchy-menu, winarchy-autotile -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 300
 
 # --- 3. Build the helpers ----------------------------------------------------------
@@ -162,6 +162,9 @@ $common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
 if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
 & $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
+# Process stats for the bar and its process panel (a console program: Zebar reads its output).
+& $csc /nologo /codepage:65001 /optimize+ /target:exe "/out:$dest\winarchy-top.exe" "$here\src\top.cs"
+if ($LASTEXITCODE) { throw 'Building winarchy-top.exe failed.' }
 Copy-Item "$here\README.md" $dest -Force
 
 # Media tools (Trigger > Transcode / Capture, Setup > Network > Wi-Fi QR).
@@ -268,6 +271,7 @@ $unit = 'F'; if ($Celsius) { $unit = 'C' }
 # The bar's logo button runs winarchy.exe; Zebar only allows a program whose path in the
 # HTML exactly matches the one whitelisted in zpack.json, so both get the same string.
 $winarchyPath = (Join-Path $dest 'winarchy.exe').Replace('\', '/')
+$topPath = (Join-Path $dest 'winarchy-top.exe').Replace('\', '/')
 $barHtml = Join-Path $pack 'bar.html'
 # VPN button: the PC's own VPN connection (Settings > Network > VPN), never a hard-coded name.
 if (-not $VpnName) {
@@ -284,15 +288,17 @@ foreach ($pbk in "$env:APPDATA\Microsoft\Network\Connections\Pbk\rasphone.pbk",
 }
 Note $(if ($VpnName) { "VPN button: $VpnName" } else { 'VPN button: hidden (no Windows VPN connection found)' })
 $jsVpn = $VpnName.Replace('\', '\\').Replace("'", "\'")
-Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
+Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{TOP_EXE}}', $topPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
 $agentsHtml = Join-Path $pack 'agents.html'
 Write-Utf8 $agentsHtml ([IO.File]::ReadAllText($agentsHtml).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')))
 $weatherHtml = Join-Path $pack 'weather.html'
 Write-Utf8 $weatherHtml ([IO.File]::ReadAllText($weatherHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';"))
+$processesHtml = Join-Path $pack 'processes.html'
+Write-Utf8 $processesHtml ([IO.File]::ReadAllText($processesHtml).Replace('{{TOP_EXE}}', $topPath.Replace("'", "\'")))
 $networkHtml = Join-Path $pack 'network.html'
 Write-Utf8 $networkHtml ([IO.File]::ReadAllText($networkHtml).Replace('{{NETWORK_PS1}}', (Join-Path $toolsDir 'network.ps1').Replace('\', '\\')))
 $zpack = Join-Path $pack 'zpack.json'
-Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')))
+Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')).Replace('{{TOP_EXE}}', $topPath.Replace('"', '\"')))
 Note "temperature in degrees $unit"
 $zebarSettings = Join-Path $zebarDir 'settings.json'
 $wantStartup = '[{"pack":"winarchy","widget":"bar","preset":"default"}]'

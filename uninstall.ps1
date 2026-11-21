@@ -33,7 +33,7 @@ if ((Get-Process glazewm -ErrorAction SilentlyContinue) -and (Test-Path $glazeCl
 if (Test-Path $daemon) {
     & $daemon --stop
     Start-Sleep -Milliseconds 800
-    Get-Process winarchy, winarchy-daemon -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process winarchy, winarchy-daemon, winarchy-top -ErrorAction SilentlyContinue | Stop-Process -Force
     & $daemon --restore-taskbar   # in case the daemon was not running
     Start-Sleep -Milliseconds 500
 }

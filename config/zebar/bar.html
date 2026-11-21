@@ -42,6 +42,9 @@
       // winarchy's AI usage script (Claude Code and Codex accounts). install.ps1 fills in the path.
       const AGENTS = '{{AGENTS_PS1}}';
 
+      // winarchy's process helper (video memory for the bar, everything for the process panel).
+      const TOP = '{{TOP_EXE}}';
+
       // Runs an allowed program without waiting for it to exit.
       function run(program, args) {
         zebar.shellSpawn(program, args).catch(err => console.error(err));
@@ -135,6 +138,40 @@
         return (
           <button className="rec" title="Recording this screen. Click or press Super+Alt+R to stop." onClick={() => systray.onLeftClick(icon.id)}>
             <span className="rec-dot"></span>REC {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
+          </button>
+        );
+      }
+
+      // CPU, RAM and video memory together; click for the process panel (a slim task manager).
+      // VRAM isn't a Zebar provider, so winarchy-top.exe streams it every 5 seconds.
+      function Stats({ cpu, memory }) {
+        const [vram, setVram] = useState(null);
+        useEffect(() => {
+          let proc = null, stopped = false, retry = null;
+          async function start() {
+            try {
+              proc = await zebar.shellSpawn(TOP, ['summary', '5000']);
+              proc.onStdout(line => { try { setVram(JSON.parse(line)); } catch {} });
+              proc.onExit(() => { if (!stopped) retry = setTimeout(start, 15000); });
+            } catch (err) { console.error(err); }
+          }
+          start();
+          return () => { stopped = true; clearTimeout(retry); try { proc?.kill(); } catch {} };
+        }, []);
+        const level = p => (p >= 85 ? 'high' : p >= 60 ? 'mid' : '');
+        const vp = vram && vram.vramTotal > 0 ? (vram.vramUsed / vram.vramTotal) * 100 : null;
+        const gb = b => (b / 1073741824).toFixed(1);
+        const tip = [
+          cpu && `CPU ${Math.round(cpu.usage)}%`,
+          memory && `RAM ${gb(memory.usedMemory)} / ${gb(memory.totalMemory)} GB`,
+          vp != null && `VRAM ${gb(vram.vramUsed)} / ${gb(vram.vramTotal)} GB`,
+          'Click for processes',
+        ].filter(Boolean).join('\n');
+        return (
+          <button className="stats" title={tip} onClick={() => zebar.startWidgetPreset('processes', 'panel').catch(console.error)}>
+            {cpu && <span className="stat"><i className="nf nf-oct-cpu"></i><span className={level(cpu.usage)}>{Math.round(cpu.usage)}%</span></span>}
+            {memory && <span className="stat"><i className="nf nf-fae-chip"></i><span className={level(memory.usage)}>{Math.round(memory.usage)}%</span></span>}
+            {vp != null && <span className="stat"><i className="nf nf-md-expansion_card"></i><span className={level(vp)}>{Math.round(vp)}%</span></span>}
           </button>
         );
       }
@@ -473,25 +510,7 @@
                 </button>
               )}
 
-              {output.memory && (
-                <div className="memory">
-                  <i className="nf nf-fae-chip"></i>
-                  {Math.round(output.memory.usage)}%
-                </div>
-              )}
-
-              {output.cpu && (
-                <div className="cpu">
-                  <i className="nf nf-oct-cpu"></i>
-
-                  {/* Change the text color if the CPU usage is high. */}
-                  <span
-                    className={output.cpu.usage > 85 ? 'high-usage' : ''}
-                  >
-                    {Math.round(output.cpu.usage)}%
-                  </span>
-                </div>
-              )}
+              {(output.cpu || output.memory) && <Stats cpu={output.cpu} memory={output.memory} />}
 
               {output.battery && (
                 <div className="battery">

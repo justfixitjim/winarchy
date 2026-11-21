@@ -303,3 +303,122 @@ section .rows { padding: 0 2px; }
 
 .link.spin i { display: inline-block; animation: wx-spin 0.9s linear infinite; }
 @keyframes wx-spin { to { transform: rotate(360deg); } }
+
+/* ── Process panel ─────────────────────────────────────────────────── */
+/* Full height, so filtering doesn't make the panel jump. */
+body:has(.procs) #root { height: 100%; }
+
+.procs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.meters {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+  .limit-head { font-size: 11px; }
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--wa-fg) 6%, transparent);
+  border: 1px solid transparent;
+
+  &:focus-within { border-color: color-mix(in srgb, var(--wa-accent) 60%, transparent); }
+  i { color: var(--wa-muted); }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    color: var(--wa-fg);
+    background: none;
+    border: none;
+    outline: none;
+    &::placeholder { color: var(--wa-muted); }
+  }
+}
+
+.table-head,
+.proc {
+  display: grid;
+  grid-template-columns: 1fr 58px 70px 70px 34px;
+  align-items: center;
+  gap: 4px;
+}
+
+.table-head {
+  margin-top: 8px;
+  padding: 0 4px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-fg) 15%, transparent);
+  color: var(--wa-muted);
+  font-size: 11px;
+
+  .col { color: inherit; }
+  .col.on { color: var(--wa-accent); }
+  .col:hover { color: var(--wa-fg); }
+  .col i { margin-left: 3px; }
+}
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.proc .num { color: color-mix(in srgb, var(--wa-fg) 80%, transparent); }
+.proc .num.mid { color: var(--wa-yellow); }
+.proc .num.high { color: var(--wa-red); }
+
+.rows-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-right: -6px;
+  padding-right: 6px;
+}
+
+.proc {
+  padding: 3px 4px;
+  cursor: default;
+
+  &:hover { background: color-mix(in srgb, var(--wa-fg) 6%, transparent); }
+  &.open { background: color-mix(in srgb, var(--wa-accent) 10%, transparent); }
+
+  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chev { width: 14px; color: var(--wa-muted); font-size: 11px; }
+  .count {
+    margin-left: 6px;
+    padding: 0 4px;
+    font-size: 10px;
+    color: var(--wa-muted);
+    border: 1px solid color-mix(in srgb, var(--wa-fg) 20%, transparent);
+  }
+
+  &.sub { font-size: 11px; .name { padding-left: 18px; color: var(--wa-muted); } }
+}
+
+.end {
+  justify-self: end;
+  width: 30px;
+  height: 18px;
+  font-size: 11px;
+  color: transparent;
+
+  i { margin: 0; }
+  &.armed { color: var(--wa-bg); background: var(--wa-red); font-size: 10px; }
+}
+.proc:hover .end:not(.armed) { color: color-mix(in srgb, var(--wa-fg) 55%, transparent); }
+.proc .end:not(.armed):hover { color: var(--wa-red); }
+
+.procs .busy,
+.procs .note { flex-shrink: 0; }
+
+/* Thin themed scrollbars in the panels. */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--wa-fg) 20%, transparent); }
+::-webkit-scrollbar-track { background: transparent; }

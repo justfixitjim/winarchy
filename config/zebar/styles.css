@@ -82,8 +82,7 @@ body,
 .tiling-direction,
 .paused-button,
 .network,
-.memory,
-.cpu,
+.stats,
 .battery {
   margin-right: 20px;
 }
@@ -274,6 +273,26 @@ body,
 }
 
 /* winarchy: AI usage. */
+/* CPU, RAM and VRAM together (click for the process panel). */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+
+  .stat i { margin-right: 4px; }
+  .mid { color: var(--wa-yellow); }
+  .high { color: var(--wa-red); }
+  &:hover i { color: var(--wa-accent); }
+}
+
 .weather,
 .network {
   background: none;

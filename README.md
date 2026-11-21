@@ -7,7 +7,7 @@ It's a thin layer over good existing tools:
 | Omarchy | winarchy |
 |---|---|
 | Hyprland tiling | [GlazeWM](https://github.com/glzr-io/glazewm), with a helper that adds Hyprland-style automatic splits |
-| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, AI usage, tray, VPN, volume, stats, weather in °F); the Windows taskbar is hidden |
+| Waybar | [Zebar](https://github.com/glzr-io/zebar) bar at the top (workspaces, clock, AI usage, tray, VPN, volume, network, CPU / RAM / VRAM, weather in °F); the Windows taskbar is hidden |
 | Walker (Super+Space) and the Omarchy menu | The `winarchy` menu: Omarchy's sections (Apps, Appearance, Trigger, Setup, Install, Remove, Update, Learn, System), searchable across apps, open windows and Settings pages, plus quick maths |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
 | Themes (Super+Ctrl+Shift+Space) | Eight themes that recolour borders, bar, menu, Windows, wallpaper, Terminal, VS Code and Firefox |
@@ -27,7 +27,7 @@ irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | i
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
 1. Installs GlazeWM, Zebar, Windows Terminal, JetBrainsMono Nerd Font, Handy, ffmpeg and ImageMagick with winget, skipping any already installed, and [herdr](https://github.com/herdrdev/herdr) with its official installer (per-user, no admin; it isn't in winget).
-2. Builds `winarchy.exe` and `winarchy-daemon.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
+2. Builds `winarchy.exe`, `winarchy-daemon.exe` and `winarchy-top.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
 5. Gives Windows Terminal the foot-like look (see [Terminal](#terminal-and-agent-workspaces)), saving your old settings first.
@@ -134,6 +134,11 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
   - The Wi-Fi switch works like the Quick Settings tile. Turning a wired adapter off or on needs an administrator, so Windows asks each time (UAC).
   - Public IP and country, fetched from Cloudflare (`1.1.1.1/cdn-cgi/trace`) when the panel opens, and live download and upload rates.
   - Network settings opens Windows' network page.
+- **CPU, RAM and VRAM** (grouped, amber past 60%, red past 85%): hover for the totals; click for the process panel, a slim task manager:
+  - Live CPU, memory and video-memory meters, then every program grouped like Task Manager's apps (`firefox 12`), sortable by CPU, RAM or VRAM. Type to filter by name or PID.
+  - Click a program to see its individual processes. The × on a row ends it: click once to arm (**End?**), again to confirm. A program's × ends all its processes.
+  - Programs running as administrator, and protected ones, can't be ended from here (the panel says so); Task Manager opens from the top corner.
+  - Numbers come from `winarchy-top.exe`, a small helper built from `src	op.cs` that reads them the way Task Manager does. It runs only while the panel is open (plus a light one for the bar's VRAM figure).
 - **Weather** (icon and temperature): click for a short forecast: now (feels-like, today's high and low, wind, humidity, chance of rain, UV, sunrise and sunset), the next 15 hours in 3-hour steps, and 5 days with each day's range on a shared scale. It comes from Open-Meteo, the same source as the bar's temperature, for the location Zebar estimates from your IP address, and shows the last forecast instantly while refreshing (at most every 10 minutes). `-Celsius` switches it to °C and km/h.
 - **Volume:**
   - Scroll over it to change the volume.

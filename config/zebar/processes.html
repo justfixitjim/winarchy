@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy process panel: opened from the bar's CPU / RAM / VRAM readout. A slim task manager:
+         what's using CPU, memory and video memory, and End to stop it. Colours come from theme.css.
+         Data streams from winarchy-top.exe while the panel is open. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.3.1';
+      import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+      import htm from 'https://esm.sh/htm@3.1.1';
+      import * as zebar from 'https://esm.sh/zebar@3.3.1';
+
+      const html = htm.bind(React.createElement);
+
+      // winarchy's process helper. install.ps1 fills in the path.
+      const TOP = '{{TOP_EXE}}';
+      const SHOWN = 60;   // rows drawn at once (type to search the rest)
+
+      let helper = null;
+      const close = () => { try { helper?.kill(); } catch {} zebar.currentWidget().close(); };
+      window.addEventListener('blur', close);
+      window.addEventListener('beforeunload', () => { try { helper?.kill(); } catch {} });
+
+      const size = b => b >= 1e9 ? `${(b / 1073741824).toFixed(1)} GB` : b >= 1e6 ? `${Math.round(b / 1048576)} MB` : b > 0 ? `${Math.round(b / 1024)} KB` : '';
+      const pct = c => c >= 0.05 ? `${c.toFixed(1)}%` : '';
+      const level = (v, mid, high) => v >= high ? 'high' : v >= mid ? 'mid' : '';
+      const LEVELS = { cpu: [5, 25], mem: [500e6, 2e9], vram: [200e6, 1e9] };
+
+      function Meter({ label, used, total, text }) {
+        const p = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+        return html`
+          <div class="meter">
+            <div class="limit-head"><span>${label}</span><span>${text}</span></div>
+            <div class="track"><div class=${`fill ${p >= 85 ? 'high' : p >= 60 ? 'mid' : 'low'}`} style=${{ width: `${p}%` }}></div></div>
+          </div>`;
+      }
+
+      function EndButton({ id, armed, setArmed, onEnd, title }) {
+        const on = armed === id;
+        return html`
+          <button class=${`end ${on ? 'armed' : ''}`} title=${on ? 'Click again to end it' : title}
+            onClick=${e => { e.stopPropagation(); if (on) { setArmed(null); onEnd(); } else setArmed(id); }}>
+            ${on ? 'End?' : html`<i class="nf nf-md-close"></i>`}
+          </button>`;
+      }
+
+      function App() {
+        const [snap, setSnap] = useState(null);
+        const [sort, setSort] = useState('cpu');
+        const [filter, setFilter] = useState('');
+        const [open, setOpen] = useState(null);       // expanded process name
+        const [armed, setArmed] = useState(null);     // End button waiting for its second click
+        const [msg, setMsg] = useState('');
+        const [error, setError] = useState('');
+        const input = useRef(null);
+
+        useEffect(() => {
+          let stopped = false;
+          zebar.shellSpawn(TOP, ['watch', '1500']).then(p => {
+            if (stopped) { p.kill(); return; }
+            helper = p;
+            p.onStdout(line => { try { setSnap(JSON.parse(line)); } catch {} });
+            p.onExit(() => { if (!stopped) setError('The process helper stopped. Close and reopen the panel.'); });
+          }).catch(err => setError(String(err)));
+          input.current?.focus();
+          const onKey = e => {
+            if (e.key !== 'Escape') return;
+            if (input.current?.value) { setFilter(''); return; }
+            close();
+          };
+          window.addEventListener('keydown', onKey);
+          return () => { stopped = true; window.removeEventListener('keydown', onKey); try { helper?.kill(); } catch {} };
+        }, []);
+
+        useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(null), 3000); return () => clearTimeout(t); }, [armed]);
+        useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(''), 4000); return () => clearTimeout(t); }, [msg]);
+
+        // Group processes by program, like Task Manager's apps: firefox.exe (14).
+        const groups = useMemo(() => {
+          if (!snap) return [];
+          const map = new Map();
+          for (const [pid, name, cpu, mem, vram] of snap.procs) {
+            let g = map.get(name);
+            if (!g) map.set(name, g = { name, cpu: 0, mem: 0, vram: 0, procs: [] });
+            g.cpu += cpu; g.mem += mem; g.vram += vram;
+            g.procs.push({ pid, cpu, mem, vram });
+          }
+          const list = [...map.values()];
+          for (const g of list) g.procs.sort((a, b) => b[sort] - a[sort]);
+          return list.sort((a, b) => b[sort] - a[sort] || b.mem - a.mem);
+        }, [snap, sort]);
+
+        const q = filter.trim().toLowerCase();
+        const shown = (q ? groups.filter(g => g.name.toLowerCase().includes(q) || g.procs.some(p => String(p.pid) === q)) : groups).slice(0, SHOWN);
+
+        async function end(pids, label) {
+          setMsg(`Ending ${label}...`);
+          try {
+            const out = await zebar.shellExec(TOP, ['kill', ...pids.map(String)]);
+            const r = JSON.parse((out.stdout || '').trim() || '{}');
+            if (r.failed?.length) setMsg(`Couldn't end ${label}: ${r.failed[0].error}`);
+            else setMsg(`Ended ${label}.`);
+          } catch (err) {
+            // shellExec rejects on a non-zero exit; the helper's JSON is still in the message.
+            const m = String(err).match(/"error":"([^"]+)"/);
+            setMsg(`Couldn't end ${label}: ${m ? m[1] : 'see the log'}`);
+          }
+        }
+
+        const col = (key, label) => html`
+          <button class=${`col num ${sort === key ? 'on' : ''}`} onClick=${() => setSort(key)} title=${`Sort by ${label}`}>
+            ${label}${sort === key ? html`<i class="nf nf-md-sort_descending"></i>` : null}
+          </button>`;
+
+        return html`
+          <div class="panel procs">
+            <div class="panel-head">
+              <span class="title">Processes</span>
+              <button class="link" title="Open Task Manager" onClick=${() => { zebar.shellSpawn('taskmgr.exe').catch(console.error); close(); }}>
+                Task Manager <i class="nf nf-md-open_in_new"></i>
+              </button>
+            </div>
+            ${snap && html`
+              <div class="meters">
+                <${Meter} label="CPU" used=${snap.cpu} total=${100} text=${`${Math.round(snap.cpu)}%`} />
+                <${Meter} label="RAM" used=${snap.memUsed} total=${snap.memTotal} text=${`${size(snap.memUsed)} / ${size(snap.memTotal)}`} />
+                ${snap.vramTotal > 0 && html`<${Meter} label="VRAM" used=${snap.vramUsed} total=${snap.vramTotal} text=${`${size(snap.vramUsed)} / ${size(snap.vramTotal)}`} />`}
+              </div>`}
+            <div class="search">
+              <i class="nf nf-md-magnify"></i>
+              <input ref=${input} value=${filter} placeholder="Filter by name or PID" spellcheck="false"
+                onInput=${e => setFilter(e.target.value)} />
+            </div>
+            <div class="table-head">
+              <span class="col name">Name</span>
+              ${col('cpu', 'CPU')}${col('mem', 'RAM')}${col('vram', 'VRAM')}
+              <span class="end-space"></span>
+            </div>
+            <div class="rows-scroll">
+              ${!snap && !error && html`<div class="note">Loading...</div>`}
+              ${shown.map(g => html`
+                <div key=${g.name}>
+                  <div class=${`proc ${open === g.name ? 'open' : ''}`} onClick=${() => setOpen(open === g.name ? null : g.name)}>
+                    <span class="name" title=${g.name}>
+                      <i class=${`nf ${open === g.name ? 'nf-md-chevron_down' : 'nf-md-chevron_right'} chev`}></i>${g.name.replace(/\.exe$/i, '')}${g.procs.length > 1 ? html`<span class="count">${g.procs.length}</span>` : null}
+                    </span>
+                    <span class=${`num ${level(g.cpu, ...LEVELS.cpu)}`}>${pct(g.cpu)}</span>
+                    <span class=${`num ${level(g.mem, ...LEVELS.mem)}`}>${size(g.mem)}</span>
+                    <span class=${`num ${level(g.vram, ...LEVELS.vram)}`}>${size(g.vram)}</span>
+                    <${EndButton} id=${g.name} armed=${armed} setArmed=${setArmed}
+                      title=${g.procs.length > 1 ? `End all ${g.procs.length} ${g.name} processes` : `End ${g.name}`}
+                      onEnd=${() => end(g.procs.map(p => p.pid), g.procs.length > 1 ? `${g.name} (${g.procs.length})` : g.name)} />
+                  </div>
+                  ${open === g.name && g.procs.map(p => html`
+                    <div class="proc sub" key=${p.pid}>
+                      <span class="name">PID ${p.pid}</span>
+                      <span class=${`num ${level(p.cpu, ...LEVELS.cpu)}`}>${pct(p.cpu)}</span>
+                      <span class=${`num ${level(p.mem, ...LEVELS.mem)}`}>${size(p.mem)}</span>
+                      <span class=${`num ${level(p.vram, ...LEVELS.vram)}`}>${size(p.vram)}</span>
+                      <${EndButton} id=${`pid${p.pid}`} armed=${armed} setArmed=${setArmed}
+                        title=${`End PID ${p.pid}`} onEnd=${() => end([p.pid], `${g.name} (PID ${p.pid})`)} />
+                    </div>`)}
+                </div>`)}
+              ${snap && !shown.length && html`<div class="note">Nothing matches.</div>`}
+            </div>
+            ${(msg || error) && html`<div class=${error ? 'note' : 'busy'}>${error || msg}</div>`}
+          </div>`;
+      }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
+    </script>
+  </body>
+</html>
