@@ -138,7 +138,7 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
   - Live CPU, memory and video-memory meters, then every program grouped like Task Manager's apps (`firefox 12`), sortable by CPU, RAM or VRAM. Type to filter by name or PID.
   - Click a program to see its individual processes. The × on a row ends it: click once to arm (**End?**), again to confirm. A program's × ends all its processes.
   - Programs running as administrator, and protected ones, can't be ended from here (the panel says so); Task Manager opens from the top corner.
-  - Numbers come from `winarchy-top.exe`, a small helper built from `src	op.cs` that reads them the way Task Manager does. It runs only while the panel is open (plus a light one for the bar's VRAM figure).
+  - Numbers come from `winarchy-top.exe`, a small helper built from `src\top.cs` that reads them the way Task Manager does. It runs only while the panel is open (plus a light one for the bar's VRAM figure).
 - **Weather** (icon and temperature): click for a short forecast: now (feels-like, today's high and low, wind, humidity, chance of rain, UV, sunrise and sunset), the next 15 hours in 3-hour steps, and 5 days with each day's range on a shared scale. It comes from Open-Meteo, the same source as the bar's temperature, for the location Zebar estimates from your IP address, and shows the last forecast instantly while refreshing (at most every 10 minutes). `-Celsius` switches it to °C and km/h.
 - **Volume:**
   - Scroll over it to change the volume.
