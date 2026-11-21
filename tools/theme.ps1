@@ -9,7 +9,8 @@
 # Targets: glazewm (window borders), bar (Zebar), menu (winarchy menu), windows (dark or light
 # mode and accent colour), wallpaper (your own pictures in ~\.glzr\winarchy\backgrounds\<id>,
 # then ones drawn from the theme's colours), firefox (browser toolbars, tabs and new tab page,
-# through userChrome.css; takes effect when Firefox restarts), terminal (Windows Terminal colour scheme), vscode (colour theme,
+# through userChrome.css; takes effect when Firefox restarts), terminal (Windows Terminal colour scheme and a
+# foot-like look: no tabs or title bar, Nerd Font, padding, no scrollbar), vscode (colour theme,
 # installing its extension if needed). Pick with -Only or -Skip, or set "themeSkip" in
 # ~\.glzr\winarchy\settings.json, for example "themeSkip": ["vscode"].
 param(
@@ -487,6 +488,20 @@ Try-Target 'firefox' {
     Log "  firefox: $($profiles.Count) profile(s)$(if ($running) { ' - restart Firefox to see it' })"
 }
 
+# Omarchy-style terminal font: the first of these Nerd Fonts that's installed (install.ps1 adds
+# JetBrainsMono Nerd Font). Asking for each is faster than listing every installed font.
+$termFont = $null
+if (Want 'terminal') {
+    Add-Type -AssemblyName System.Drawing
+    # NFM = Nerd Font Mono: icons one cell wide, best in a terminal.
+    foreach ($f in 'JetBrainsMono NFM', 'JetBrainsMono NF', 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font', 'CaskaydiaMono NFM', 'CaskaydiaMono Nerd Font', 'Cascadia Mono NF') {
+        $font = New-Object System.Drawing.Font($f, 10)
+        $hit = $font.Name -eq $f
+        $font.Dispose()
+        if ($hit) { $termFont = $f; break }
+    }
+}
+
 Try-Target 'terminal' {
     if (-not $terminalSettings) { Log '  terminal: Windows Terminal not found, skipped'; return }
     Save-Backup
@@ -500,10 +515,30 @@ Try-Target 'terminal' {
         if (-not $j.profiles) { Set-Prop $j 'profiles' ([pscustomobject]@{ defaults = [pscustomobject]@{}; list = @() }) }
         if ($j.profiles -is [array]) { throw 'old-style profiles list; set colorScheme to "winarchy" by hand' }
         if (-not $j.profiles.defaults) { Set-Prop $j.profiles 'defaults' ([pscustomobject]@{}) }
-        Set-Prop $j.profiles.defaults 'colorScheme' 'winarchy'
+        $d = $j.profiles.defaults
+        Set-Prop $d 'colorScheme' 'winarchy'
+        # Like Omarchy's terminal: just the text, with room around it. GlazeWM manages the windows
+        # and herdr the panes, so the tab row and title bar go (focus mode; Ctrl+Shift+T still opens
+        # tabs, Ctrl+Tab switches them).
+        Set-Prop $d 'padding' '14'
+        Set-Prop $d 'scrollbarState' 'hidden'
+        Set-Prop $d 'bellStyle' 'none'
+        Set-Prop $d 'cursorShape' 'filledBox'
+        if ($termFont) { Set-Prop $d 'font' ([pscustomobject]@{ face = $termFont; size = 11 }) }
+        Set-Prop $j 'launchMode' 'focus'
+        # A Terminal theme in the same colours, for its menus, command palette and any tab row.
+        $c = $t.colors
+        $wtTheme = [pscustomobject]@{
+            name   = 'winarchy'
+            window = [pscustomobject]@{ applicationTheme = $(if ($t.mode -eq 'light') { 'light' } else { 'dark' }); useMica = $false }
+            tabRow = [pscustomobject]@{ background = $c.surface; unfocusedBackground = $c.surface }
+            tab    = [pscustomobject]@{ background = 'terminalBackground'; unfocusedBackground = $c.surface; showCloseButton = 'hover' }
+        }
+        Set-Prop $j 'themes' (@(@($j.themes) | Where-Object { $_ -and $_.name -ne 'winarchy' }) + @($wtTheme))
+        Set-Prop $j 'theme' 'winarchy'
         Write-Text $ts (Format-Json $j)
     }
-    Log '  terminal: colour scheme "winarchy"'
+    Log ('  terminal: colour scheme "winarchy", focus mode' + $(if ($termFont) { ", $termFont" } else { ' (no Nerd Font found; font left as is)' }))
 }
 
 Try-Target 'vscode' {

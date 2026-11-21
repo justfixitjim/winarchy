@@ -12,6 +12,8 @@ It's a thin layer over good existing tools:
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
 | Themes (Super+Ctrl+Shift+Space) | Eight themes that recolour borders, bar, menu, Windows, wallpaper, Terminal, VS Code and Firefox |
 | Agents panel | Claude Code and Codex usage in the bar, several accounts, auto-switching near the limit |
+| Foot terminal | Windows Terminal made bare like foot: no tabs or title bar, JetBrainsMono Nerd Font, padding, theme colours |
+| herdr (agent workspaces) | [herdr](https://github.com/herdrdev/herdr) on Super+Shift+Enter: AI coding agents side by side, with each one's state in a sidebar |
 | Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
 
 ## Install
@@ -24,11 +26,12 @@ irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | i
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
-1. Installs GlazeWM, Zebar, Windows Terminal, Handy, ffmpeg and ImageMagick with winget, skipping any already installed.
+1. Installs GlazeWM, Zebar, Windows Terminal, JetBrainsMono Nerd Font, Handy, ffmpeg and ImageMagick with winget, skipping any already installed, and [herdr](https://github.com/herdrdev/herdr) with its official installer (per-user, no admin; it isn't in winget).
 2. Builds `winarchy.exe` and `winarchy-daemon.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
-5. Starts GlazeWM now and at every sign-in.
+5. Gives Windows Terminal the foot-like look (see [Terminal](#terminal-and-agent-workspaces)), saving your old settings first.
+6. Starts GlazeWM now and at every sign-in.
 
 Re-run it any time to upgrade. Options:
 
@@ -38,6 +41,8 @@ Re-run it any time to upgrade. Options:
 - `-SkipApps` skips winget.
 - `-Celsius` shows the bar's temperature in Celsius (the default is Fahrenheit).
 - `-NoDictation` skips Handy.
+- `-KeepTerminal` leaves Windows Terminal's look and colours alone (and skips the Nerd Font).
+- `-NoHerdr` skips herdr.
 - `-VpnName <name>` picks which Windows VPN connection the bar's VPN button controls (default: the first one found; `none` hides it).
 - `-WithPowerToys` also installs PowerToys. winarchy doesn't need it, but its other tools (Peek, Always on top, ZoomIt) are handy.
 
@@ -51,6 +56,7 @@ Re-run it any time to upgrade. Options:
 | Super+Ctrl+Shift+Space | Pick a colour theme |
 | Super+Alt+R | Start / stop screen recording |
 | Super+Enter | Terminal |
+| Super+Shift+Enter | Agent workspace (herdr) |
 | Super+Shift+B / Super+Shift+Alt+B | Default browser / private window |
 | Super+Shift+F | Explorer |
 | Super+Shift+N | VS Code (falls back to Notepad) |
@@ -135,6 +141,20 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
   - Click the speaker to mute or unmute.
   - Right-click for Windows sound settings.
 
+## Terminal and agent workspaces
+
+Omarchy's terminal is foot: just text, no window chrome. winarchy keeps Windows Terminal (already fast, GPU-rendered and the terminal herdr supports on Windows) and strips it down the same way:
+
+- **Focus mode:** no tab row or title bar. GlazeWM tiles the windows and herdr splits panes, so neither is needed. Ctrl+Shift+T still opens tabs and Ctrl+Tab switches them; Ctrl+Shift+P opens the command palette.
+- **JetBrainsMono Nerd Font** (the NFM variant, so icons stay one cell wide) at 11 pt, 14 px padding, block cursor, no scrollbar, no bell.
+- **Theme colours** for the text and Terminal's own menus, following the theme picker.
+
+**Super+Shift+Enter** opens [herdr](https://herdr.dev) in a new Terminal window (also menu → AI → Agent workspace). It's a workspace manager for coding agents: run Claude Code, Codex and others in tiled panes, grouped into workspaces, with a sidebar showing which agents are working, blocked on a question, or idle. Sessions keep running when you close the window; run `herdr` again to reattach.
+
+- `ctrl+b` then `?` lists its keys. Its config is `%APPDATA%\herdr\config.toml`.
+- For more reliable agent status, herdr offers integrations: `herdr integration install claude` (or `codex`). They add hooks to that agent's own settings, so winarchy leaves that choice to you.
+- Update with `herdr update`.
+
 ## AI usage and accounts
 
 Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`Claude 42%  Codex 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, a star for your preferred account, the auto-switch toggle, and Add account. It shows the last numbers instantly and only re-checks when they're a few minutes old.
@@ -155,7 +175,7 @@ A theme changes:
 - **GlazeWM** window borders, the **top bar** and the **winarchy menu**.
 - **Windows:** dark or light mode and the accent colour.
 - **Wallpaper:** your own pictures from `~\.glzr\winarchy\backgrounds\<theme id>` (for example `backgrounds\gruvbox`), then three drawn from the theme's colours. Appearance → Next background cycles them.
-- **Windows Terminal:** a `winarchy` colour scheme, set as the default.
+- **Windows Terminal:** a `winarchy` colour scheme, set as the default, plus a matching Terminal theme for its menus.
 - **VS Code:** the matching colour theme, installing its extension if needed.
 - **Firefox:** toolbars, tabs, menus and the new tab page (through `userChrome.css`, which winarchy switches on). Shows the next time Firefox starts. Your own `userChrome.css` is kept; winarchy only adds one import line.
 
@@ -191,7 +211,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
 .\uninstall.ps1 -RemoveApps
 ```
 
-This restores the taskbar, the Zebar bar and the GlazeWM config winarchy replaced, and removes the sign-in shortcut. Handy stays installed.
+This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Terminal settings winarchy replaced, and removes the sign-in shortcut. Handy, the Nerd Font and herdr stay installed (herdr lives in `%USERPROFILE%\.herdr` and `%LOCALAPPDATA%\Programs\Herdr`).
 
 ## How it works
 

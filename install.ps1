@@ -36,6 +36,10 @@ param(
     [switch]$WithPowerToys,
     # Skip the media tools' dependencies (ffmpeg, ImageMagick).
     [switch]$NoMediaTools,
+    # Leave Windows Terminal's look alone (no theme colours, focus mode or Nerd Font).
+    [switch]$KeepTerminal,
+    # Don't install herdr (terminal workspace for running several AI coding agents).
+    [switch]$NoHerdr,
     # Windows VPN connection for the bar's VPN button (default: the first one found).
     # Pass -VpnName none to hide the button.
     [string]$VpnName
@@ -98,6 +102,12 @@ if (-not $SkipApps) {
         $apps += @{ Id = 'ImageMagick.ImageMagick'; Name = 'ImageMagick (media tools)'; Present = {
             [bool](Get-ChildItem "$env:ProgramFiles\ImageMagick-*\magick.exe" -ErrorAction SilentlyContinue) } }
     }
+    if (-not $KeepTerminal) {
+        # Omarchy-style terminal font, with the icon glyphs terminal tools use.
+        $apps += @{ Id = 'DEVCOM.JetBrainsMonoNerdFont'; Name = 'JetBrainsMono Nerd Font (terminal)'; Present = {
+            $keys = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts', 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+            [bool](Get-ItemProperty $keys -ErrorAction SilentlyContinue | ForEach-Object { $_.PSObject.Properties.Name } | Where-Object { $_ -like 'JetBrainsMono N*' }) } }
+    }
     if ($WithPowerToys) {
         $apps += @{ Id = 'Microsoft.PowerToys'; Name = 'PowerToys'; Present = { [bool](Get-AppxPackage -Name 'Microsoft.CommandPalette' -ErrorAction SilentlyContinue) } }
     }
@@ -109,6 +119,23 @@ if (-not $SkipApps) {
         Note "$($app.Name): installing (approve the UAC prompt if one appears)"
         Quiet { winget install --id $app.Id -e --accept-source-agreements --accept-package-agreements --disable-interactivity }
         if (-not (& $app.Present)) { Write-Warning "$($app.Name) did not install cleanly (winget exit code $LASTEXITCODE)." }
+    }
+
+    # herdr: a terminal workspace for running several AI coding agents side by side, with each
+    # agent's state (working, blocked, idle) in a sidebar. It isn't in winget (stable), so this
+    # uses its official installer: per-user, no admin, checks the download's SHA-256 and adds
+    # itself to your user PATH. Update later with: herdr update
+    if (-not $NoHerdr) {
+        $herdrExe = Join-Path $env:LOCALAPPDATA 'Programs\Herdr\bin\herdr.exe'
+        if ((Test-Path $herdrExe) -or (Get-Command herdr -ErrorAction SilentlyContinue)) { Note 'herdr: already installed' }
+        else {
+            Note 'herdr: installing (official installer from herdr.dev)'
+            $herdrInstaller = Join-Path $env:TEMP 'winarchy-herdr-install.ps1'
+            & curl.exe -fsSL https://herdr.dev/install.ps1 -o $herdrInstaller
+            if ($LASTEXITCODE -eq 0) { Quiet { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $herdrInstaller -Channel stable } }
+            Remove-Item $herdrInstaller -ErrorAction SilentlyContinue
+            if (-not (Test-Path $herdrExe)) { Write-Warning 'herdr did not install. See https://herdr.dev/docs/windows-beta/' }
+        }
     }
 }
 if (-not (Test-Path $glazeExe)) { throw "GlazeWM is not installed at $glazeExe. Re-run without -SkipApps." }
@@ -286,7 +313,8 @@ if (Test-Path $zebarSettings) {
 Write-Utf8 $zebarSettings (($zs | ConvertTo-Json -Depth 5) + "`n")
 
 # Colour themes (Super+Ctrl+Shift+Space). Re-apply the current one (Tokyo Night on a new
-# install) to winarchy's own pieces; Windows, Terminal and VS Code change only when you pick one.
+# install) to winarchy's own pieces and Windows Terminal; Windows itself and VS Code change only
+# when you pick one.
 $themesDir = Join-Path $dest 'themes'
 New-Item -ItemType Directory -Force -Path $themesDir | Out-Null
 Copy-Item "$here\themes\*.json" $themesDir -Force
@@ -296,6 +324,12 @@ if (Test-Path $themeJson) { try { $themeId = (Get-Content $themeJson -Raw | Conv
 if (-not (Test-Path (Join-Path $themesDir "$themeId.json"))) { $themeId = 'tokyo-night' }
 Quiet { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $toolsDir 'theme.ps1') $themeId -Only 'glazewm,bar,menu' -NoReload -NoPopup }
 Note "Theme: $themeId"
+if (-not $KeepTerminal) {
+    # Foot-like Windows Terminal: theme colours, no tabs or title bar, Nerd Font, padding.
+    # The first change saves your old settings; uninstall.ps1 puts them back.
+    Quiet { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $toolsDir 'theme.ps1') $themeId -Only 'terminal' -NoReload -NoPopup }
+    Note 'Windows Terminal: theme colours, focus mode (no tabs or title bar), Nerd Font'
+}
 
 # --- 7. Dictation: Handy push-to-talk on Right Ctrl ----------------------------------------
 # Handy (https://github.com/cjpais/Handy) is free, open source and transcribes on your PC. It

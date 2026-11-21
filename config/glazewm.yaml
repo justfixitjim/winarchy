@@ -114,6 +114,9 @@ keybindings:
   # Terminal
   - commands: ['shell-exec wt']
     bindings: ['lwin+enter']
+  # Agent workspace (herdr: AI coding agents side by side)
+  - commands: ['shell-exec wt %LOCALAPPDATA%/Programs/Herdr/bin/herdr.exe']
+    bindings: ['lwin+shift+enter']
   # Browser (your default browser)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe launch browser']
     bindings: ['lwin+shift+b']
