@@ -128,6 +128,7 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
   - The Wi-Fi switch works like the Quick Settings tile. Turning a wired adapter off or on needs an administrator, so Windows asks each time (UAC).
   - Public IP and country, fetched from Cloudflare (`1.1.1.1/cdn-cgi/trace`) when the panel opens, and live download and upload rates.
   - Network settings opens Windows' network page.
+- **Weather** (icon and temperature): click for a short forecast: now (feels-like, today's high and low, wind, humidity, chance of rain, UV, sunrise and sunset), the next 15 hours in 3-hour steps, and 5 days with each day's range on a shared scale. It comes from Open-Meteo, the same source as the bar's temperature, for the location Zebar estimates from your IP address, and shows the last forecast instantly while refreshing (at most every 10 minutes). `-Celsius` switches it to °C and km/h.
 - **Volume:**
   - Scroll over it to change the volume.
   - Hover to reveal a slider.

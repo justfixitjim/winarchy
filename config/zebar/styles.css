@@ -274,6 +274,7 @@ body,
 }
 
 /* winarchy: AI usage. */
+.weather,
 .network {
   background: none;
   border: none;

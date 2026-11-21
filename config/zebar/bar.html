@@ -505,10 +505,14 @@
               )}
 
               {output.weather && (
-                <div className="weather">
+                <button
+                  className="weather"
+                  title="Click for the forecast"
+                  onClick={() => zebar.startWidgetPreset('weather', 'panel').catch(console.error)}
+                >
                   {getWeatherIcon(output.weather)}
                   {Math.round(TEMP_UNIT === 'C' ? output.weather.celsiusTemp : output.weather.fahrenheitTemp)}°{TEMP_UNIT}
-                </div>
+                </button>
               )}
             </div>
           </div>

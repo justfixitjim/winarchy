@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy weather panel: opened from the bar's temperature. Colours come from theme.css.
+         Forecast from Open-Meteo (the same source as the bar's temperature), for the location
+         Zebar estimates from your IP address. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import React, { useState, useEffect } from 'https://esm.sh/react@18.3.1';
+      import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+      import htm from 'https://esm.sh/htm@3.1.1';
+      import * as zebar from 'https://esm.sh/zebar@3.3.1';
+
+      const html = htm.bind(React.createElement);
+
+      // 'F' (Fahrenheit, mph) or 'C' (Celsius, km/h). install.ps1 sets this, like the bar's.
+      const TEMP_UNIT = 'F';
+      const STORE = 'winarchy.weather';
+      const FRESH_MS = 10 * 60 * 1000;
+
+      const close = () => zebar.currentWidget().close();
+      window.addEventListener('blur', close);
+      window.addEventListener('keydown', e => e.key === 'Escape' && close());
+
+      // WMO weather codes (Open-Meteo) -> words and a day / night icon.
+      const CODES = [
+        [[0], 'Clear', 'day_sunny', 'night_clear'],
+        [[1], 'Mostly clear', 'day_sunny_overcast', 'night_alt_partly_cloudy'],
+        [[2], 'Partly cloudy', 'day_cloudy', 'night_alt_cloudy'],
+        [[3], 'Overcast', 'cloudy', 'cloudy'],
+        [[45, 48], 'Fog', 'fog', 'fog'],
+        [[51, 53, 55], 'Drizzle', 'day_sprinkle', 'night_alt_sprinkle'],
+        [[56, 57], 'Freezing drizzle', 'day_sprinkle', 'night_alt_sprinkle'],
+        [[61, 80], 'Light rain', 'day_rain', 'night_alt_rain'],
+        [[63, 81], 'Rain', 'day_rain', 'night_alt_rain'],
+        [[65, 82], 'Heavy rain', 'rain', 'rain'],
+        [[66, 67], 'Freezing rain', 'day_rain', 'night_alt_rain'],
+        [[71, 85], 'Light snow', 'day_snow', 'night_alt_snow'],
+        [[73, 77], 'Snow', 'day_snow', 'night_alt_snow'],
+        [[75, 86], 'Heavy snow', 'snow', 'snow'],
+        [[95], 'Thunderstorm', 'day_thunderstorm', 'night_alt_thunderstorm'],
+        [[96, 99], 'Thunderstorm, hail', 'day_thunderstorm', 'night_alt_thunderstorm'],
+      ];
+      const describe = (code, day = true) => {
+        const c = CODES.find(([codes]) => codes.includes(code)) || [[], 'Unknown', 'cloudy', 'cloudy'];
+        return { text: c[1], icon: `nf nf-weather-${day ? c[2] : c[3]}` };
+      };
+      const deg = t => `${Math.round(t)}°`;
+      const compass = d => ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(((d % 360) + 360) % 360 / 45) % 8];
+      const clock = iso => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const hour = iso => new Date(iso).toLocaleTimeString([], { hour: 'numeric' });
+      const weekday = (iso, i) => i === 0 ? 'Today' : new Date(`${iso}T12:00`).toLocaleDateString([], { weekday: 'short' });
+
+      function load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } }
+      function save(v) { try { localStorage.setItem(STORE, JSON.stringify(v)); } catch {} }
+
+      async function forecast(lat, lon) {
+        const q = new URLSearchParams({
+          latitude: lat, longitude: lon, timezone: 'auto', forecast_days: '5',
+          current: 'temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day',
+          hourly: 'temperature_2m,weather_code,precipitation_probability,is_day',
+          daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max',
+          temperature_unit: TEMP_UNIT === 'C' ? 'celsius' : 'fahrenheit',
+          wind_speed_unit: TEMP_UNIT === 'C' ? 'kmh' : 'mph',
+        });
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`);
+        if (!r.ok) throw new Error(`Open-Meteo ${r.status}`);
+        return r.json();
+      }
+
+      function Now({ w, place }) {
+        const c = w.current, d = w.daily;
+        const now = describe(c.weather_code, c.is_day);
+        return html`
+          <div class="card active wx-now">
+            <i class=${`${now.icon} wx-big`}></i>
+            <div class="wx-main">
+              <div class="wx-temp">${deg(c.temperature_2m)}<span class="wx-unit">${TEMP_UNIT}</span></div>
+              <div>${now.text}</div>
+            </div>
+            <div class="wx-side">
+              <div>feels ${deg(c.apparent_temperature)}</div>
+              <div><span class="hi">${deg(d.temperature_2m_max[0])}</span> / <span class="lo">${deg(d.temperature_2m_min[0])}</span></div>
+              ${place && html`<div class="wx-place" title="Estimated from your IP address">${place}</div>`}
+            </div>
+          </div>
+          <div class="wx-facts">
+            <span title="Wind"><i class="nf nf-weather-strong_wind"></i>${Math.round(c.wind_speed_10m)} ${TEMP_UNIT === 'C' ? 'km/h' : 'mph'} ${compass(c.wind_direction_10m)}</span>
+            <span title="Humidity"><i class="nf nf-weather-humidity"></i>${c.relative_humidity_2m}%</span>
+            <span title="Chance of rain or snow today"><i class="nf nf-weather-umbrella"></i>${d.precipitation_probability_max[0] ?? 0}%</span>
+            <span title="UV index today">UV ${Math.round(d.uv_index_max[0] ?? 0)}</span>
+          </div>
+          <div class="wx-facts">
+            <span title="Sunrise"><i class="nf nf-weather-sunrise"></i>${clock(d.sunrise[0])}</span>
+            <span title="Sunset"><i class="nf nf-weather-sunset"></i>${clock(d.sunset[0])}</span>
+          </div>`;
+      }
+
+      // The next 15 hours, every 3 hours.
+      function Hours({ w }) {
+        const h = w.hourly;
+        const start = Math.max(0, h.time.findIndex(t => t > w.current.time) );
+        const slots = [0, 3, 6, 9, 12].map(n => start + n).filter(i => i < h.time.length);
+        return html`
+          <section>
+            <div class="provider"><span>Next hours</span></div>
+            <div class="wx-hours">
+              ${slots.map(i => {
+                const s = describe(h.weather_code[i], h.is_day[i]);
+                return html`
+                  <div class="wx-hour" key=${i} title=${s.text}>
+                    <div class="wx-dim">${hour(h.time[i])}</div>
+                    <i class=${s.icon}></i>
+                    <div>${deg(h.temperature_2m[i])}</div>
+                    <div class="wx-rain">${h.precipitation_probability[i] >= 20 ? `${h.precipitation_probability[i]}%` : ''}</div>
+                  </div>`;
+              })}
+            </div>
+          </section>`;
+      }
+
+      // Five days, each with its low-to-high range on a shared scale.
+      function Days({ w }) {
+        const d = w.daily;
+        const lo = Math.min(...d.temperature_2m_min), hi = Math.max(...d.temperature_2m_max);
+        const pos = t => `${((t - lo) / Math.max(1, hi - lo)) * 100}%`;
+        return html`
+          <section>
+            <div class="provider"><span>5 days</span></div>
+            ${d.time.map((t, i) => {
+              const s = describe(d.weather_code[i]);
+              return html`
+                <div class="wx-day" key=${t} title=${s.text}>
+                  <span class="wx-dname">${weekday(t, i)}</span>
+                  <i class=${s.icon}></i>
+                  <span class="wx-rain">${d.precipitation_probability_max[i] >= 20 ? `${d.precipitation_probability_max[i]}%` : ''}</span>
+                  <span class="lo">${deg(d.temperature_2m_min[i])}</span>
+                  <span class="wx-range">
+                    <span class="wx-span" style=${{ left: pos(d.temperature_2m_min[i]), right: `calc(100% - ${pos(d.temperature_2m_max[i])})` }}></span>
+                  </span>
+                  <span class="hi">${deg(d.temperature_2m_max[i])}</span>
+                </div>`;
+            })}
+          </section>`;
+      }
+
+      function App() {
+        const [state, setState] = useState(load);   // { lat, lon, place, data, fetched }
+        const [error, setError] = useState('');
+        const [busy, setBusy] = useState(false);
+
+        async function refresh(lat, lon, place) {
+          setBusy(true);
+          try {
+            const data = await forecast(lat, lon);
+            const next = { lat, lon, place, data, fetched: Date.now() };
+            setState(next); save(next); setError('');
+          } catch (err) { console.error(err); setError('Could not reach Open-Meteo. Showing the last forecast.'); }
+          setBusy(false);
+        }
+
+        useEffect(() => {
+          const s = load();
+          const stale = !s.fetched || Date.now() - s.fetched > FRESH_MS;
+          if (s.lat != null && stale) refresh(s.lat, s.lon, s.place);
+          // Location: Zebar's IP estimate (kept, so later opens don't wait for it).
+          const ip = zebar.createProvider({ type: 'ip' });
+          const use = out => {
+            if (!out || out.approxLatitude == null) return;
+            const place = [out.approxCity, out.approxCountry].filter(Boolean).join(', ');
+            const moved = s.lat == null || Math.abs(out.approxLatitude - s.lat) > 0.05 || Math.abs(out.approxLongitude - s.lon) > 0.05;
+            if (moved) { s.lat = out.approxLatitude; s.lon = out.approxLongitude; s.place = place; refresh(s.lat, s.lon, place); }
+          };
+          use(ip.output);
+          const stop = ip.onOutput(use);
+          return () => { stop?.(); };
+        }, []);
+
+        const w = state.data;
+        return html`
+          <div class="panel">
+            <div class="panel-head">
+              <span class="title">Weather</span>
+              <button class=${`link ${busy ? 'spin' : ''}`} title="Refresh"
+                onClick=${() => state.lat != null && refresh(state.lat, state.lon, state.place)}>
+                <i class="nf nf-md-refresh"></i>
+              </button>
+            </div>
+            ${!w && !error && html`<div class="note">Loading...</div>`}
+            ${w && html`<${Now} w=${w} place=${state.place} /><${Hours} w=${w} /><${Days} w=${w} />`}
+            ${error && html`<div class="note">${error}</div>`}
+            ${w && html`<div class="wx-credit">Open-Meteo, updated ${new Date(state.fetched).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>`}
+          </div>`;
+      }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
+    </script>
+  </body>
+</html>
