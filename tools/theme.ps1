@@ -399,7 +399,16 @@ Try-Target 'bar' {
     Write-Text (Join-Path $pack 'theme.css') $css
     if (-not $NoReload -and (Get-Process zebar -ErrorAction SilentlyContinue)) {
         Get-Process zebar | Stop-Process -Force
-        Start-Sleep -Milliseconds 500
+        # Wait until Zebar and its web views have gone, then a little longer: a Zebar started
+        # within about a second of the last one exiting often can't load its bar (it shows the
+        # web view's grey "can't reach this page" strip). 2 s was always enough in testing.
+        for ($i = 0; $i -lt 40; $i++) {
+            $alive = [bool](Get-Process zebar -ErrorAction SilentlyContinue) -or [bool](Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" -ErrorAction SilentlyContinue |
+                Where-Object { $_.CommandLine -match 'zebar' })
+            if (-not $alive) { break }
+            Start-Sleep -Milliseconds 250
+        }
+        Start-Sleep -Seconds 3
         Start-Process "$env:ProgramFiles\glzr.io\Zebar\zebar.exe"
     }
     Log '  bar: colours'
