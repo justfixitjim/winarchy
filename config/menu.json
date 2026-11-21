@@ -19,6 +19,18 @@
             "terminal": "try { & \"$env:LOCALAPPDATA\\Programs\\Herdr\\bin\\herdr.exe\" } catch { Write-Host 'herdr is not installed. Re-run the winarchy installer, or see https://herdr.dev' -ForegroundColor Red; Read-Host 'Press Enter to close' }; exit"
           },
           {
+            "label": "Launch default agent",
+            "hint": "Super+Shift+Ctrl+A",
+            "run": "{dir}\\winarchy.exe",
+            "args": "agent"
+          },
+          {
+            "label": "Default agent",
+            "hint": "pick one",
+            "provider": "agents",
+            "items": []
+          },
+          {
             "label": "Usage",
             "hint": "every account",
             "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" status } catch { Write-Host $_ -ForegroundColor Red }; Read-Host 'Press Enter to close'; exit"

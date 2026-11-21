@@ -127,6 +127,9 @@ keybindings:
   # Agent workspace (herdr: AI coding agents side by side)
   - commands: ['shell-exec wt %LOCALAPPDATA%/Programs/Herdr/bin/herdr.exe']
     bindings: ['lwin+shift+enter']
+  # Default coding agent (pick it in menu > AI > Default agent)
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe agent']
+    bindings: ['lwin+shift+ctrl+a']
   # Browser (your default browser)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe launch browser']
     bindings: ['lwin+shift+b']

@@ -31,7 +31,7 @@
         "shellCommands": [
           {
             "program": "{{WINARCHY_EXE}}",
-            "argsRegex": "^(ai|toggle (awake|nightlight|dnd|bar|gaps))?$"
+            "argsRegex": "^(ai|agent|toggle (awake|nightlight|dnd|bar|gaps))?$"
           },
           {
             "program": "explorer.exe",
@@ -159,7 +159,7 @@
         "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": ".*network\\.ps1 (info|public|wifi (on|off)|adapter \\d+ (on|off))$"
+            "argsRegex": ".*network\\.ps1 (info|public|password|wifi (on|off)|adapter \\d+ (on|off))$"
           },
           {
             "program": "cmd.exe",

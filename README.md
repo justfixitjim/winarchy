@@ -66,6 +66,7 @@ Re-run it any time to upgrade. Options:
 | Super+Ctrl+Alt+R | Calendar and reminders |
 | Super+Enter | Terminal |
 | Super+Shift+Enter | Agent workspace (herdr) |
+| Super+Shift+Ctrl+A | Your default coding agent (Claude Code, Codex, ...) in its own window |
 | Super+Shift+B / Super+Shift+Alt+B | Default browser / private window |
 | Super+Shift+F | Explorer |
 | Super+Shift+N | VS Code (falls back to Notepad) |
@@ -147,6 +148,7 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
 - **Network** (Wi-Fi signal or wired icon, with the Wi-Fi name): hover for your IP address; click for the network panel:
   - Each Wi-Fi and wired adapter with its state and an on / off switch, and for the connected ones: signal, band and channel (Wi-Fi), speed, IPv4 and IPv6 addresses, gateway, DNS and MAC address. Click an address to copy it.
   - The Wi-Fi switch works like the Quick Settings tile. Turning a wired adapter off or on needs an administrator, so Windows asks each time (UAC).
+  - On Wi-Fi, **Password**: click *show* for the network's saved password, then click it to copy (no admin needed).
   - Public IP and country, fetched from Cloudflare (`1.1.1.1/cdn-cgi/trace`) when the panel opens, and live download and upload rates.
   - Network settings opens Windows' network page.
 - **CPU, RAM and VRAM** (grouped, amber past 60%, red past 85%): hover for the totals; click for the process panel, a slim task manager:
@@ -170,6 +172,8 @@ Omarchy's terminal is foot: just text, no window chrome. winarchy keeps Windows 
 - **Theme colours** for the text and Terminal's own menus, following the theme picker.
 
 **Super+Shift+Enter** opens [herdr](https://herdr.dev) in a new Terminal window (also menu → AI → Agent workspace). It's a workspace manager for coding agents: run Claude Code, Codex and others in tiled panes, grouped into workspaces, with a sidebar showing which agents are working, blocked on a question, or idle. Sessions keep running when you close the window; run `herdr` again to reattach.
+
+**Super+Shift+Ctrl+A** starts your default coding agent in its own Terminal window, in your home folder (like Omarchy's). Pick it in menu → AI → Default agent: Claude Code, Codex, OpenCode, Gemini CLI, GitHub Copilot CLI and a few others, whichever are installed. Until you pick one, it's the first installed. Right-clicking the AI usage in the bar does the same.
 
 - `ctrl+b` then `?` lists its keys. Its config is `%APPDATA%\herdr\config.toml`.
 - For more reliable agent status, herdr offers integrations: `herdr integration install claude` (or `codex`). They add hooks to that agent's own settings, so winarchy leaves that choice to you.
@@ -220,7 +224,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `glaze` for a GlazeWM command.
   - `terminal` for PowerShell run in Windows Terminal.
   - `page` to jump to another page, or `items` for a submenu.
-- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), plus the `stayAwake` and `nightLight` toggles. Changes take effect when GlazeWM restarts.
+- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
 - **Top bar:** `~\.glzr\zebar\winarchy\bar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 

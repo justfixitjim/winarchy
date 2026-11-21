@@ -227,6 +227,8 @@ button {
 }
 
 section .rows { padding: 0 2px; }
+.row.reveal .value { color: var(--wa-accent); }
+.row .hide { margin-left: 6px; color: var(--wa-muted); &:hover { color: var(--wa-accent); } }
 .panel > .add { margin-top: 10px; }
 
 /* ── Weather panel ─────────────────────────────────────────────────── */

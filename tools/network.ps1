@@ -5,6 +5,7 @@
     network.ps1 info              Wi-Fi and wired adapters as JSON (also saved for the panel to
                                   show at once next time)
     network.ps1 public            Public IP and country, from Cloudflare (1.1.1.1/cdn-cgi/trace)
+    network.ps1 password          The connected Wi-Fi network's saved password (no admin needed)
     network.ps1 wifi on|off       Wi-Fi radio, like the Quick Settings tile (no admin needed)
     network.ps1 adapter <n> on|off
                                   Enable or disable the adapter with interface index <n>.
@@ -142,6 +143,17 @@ switch ($Command) {
         }
         $out.info = Get-Info
         Write-Json $out | Out-Null
+    }
+    'password' {
+        # The connected Wi-Fi network's saved password (Omarchy's `omarchy network password`).
+        # netsh's labels are only matched in English.
+        $ssid = (netsh.exe wlan show interfaces) | Where-Object { $_ -match '^\s+SSID\s+:\s+(.+)$' } |
+            ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1
+        if (-not $ssid) { Write-Json ([ordered]@{ ssid = $null; error = 'not on Wi-Fi' }) | Out-Null; break }
+        $lines = netsh.exe wlan show profile name="$ssid" key=clear
+        $key = $lines | Where-Object { $_ -match '^\s+Key Content\s+:\s+(.+)$' } | ForEach-Object { $Matches[1] } | Select-Object -First 1
+        $open = [bool]($lines | Where-Object { $_ -match '^\s+Authentication\s+:\s+Open\s*$' })
+        Write-Json ([ordered]@{ ssid = $ssid; password = $key; open = $open; error = $(if (-not $key -and -not $open) { 'not saved, or Windows is not in English' } else { $null }) }) | Out-Null
     }
     default { throw "Unknown command: $Command" }
 }

@@ -398,10 +398,11 @@
           p.accounts.map(a => `${a.active ? '> ' : '   '}${a.label}${a.plan ? ` (${a.plan})` : ''}: ` +
             ([win(a.session, '5h'), win(a.weekly, 'week')].filter(Boolean).join(', ') || a.status) +
             (a.stale ? ' [old]' : '') + (a.status !== 'ok' && (a.session || a.weekly) ? ` - ${a.status}` : '')).join('\n')
-        ).join('\n\n') + '\n\nClick for details and switching';
+        ).join('\n\n') + '\n\nClick for details and switching\nRight-click to start your default agent (Super+Shift+Ctrl+A)';
 
         return html`
-          <button className="agents" title=${tip} onClick=${() => zebar.startWidgetPreset('agents', 'panel').catch(console.error)}>
+          <button className="agents" title=${tip} onClick=${() => panel('agents')}
+            onContextMenu=${e => { e.preventDefault(); run(WINARCHY, ['agent']); }}>
             <i className="nf nf-md-robot_outline"></i>
             ${providers.map(p => {
               const a = p.accounts.find(x => x.active) || p.accounts[0];

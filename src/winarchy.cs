@@ -19,6 +19,8 @@
 //   winarchy remind add <min> <text> pop up <text> in <min> minutes (winarchy-daemon shows it)
 //   winarchy remind remove <id>      cancel one reminder; `remind clear` cancels all
 //   winarchy panel <name>            open a bar panel: clock, audio, bluetooth, network, ...
+//   winarchy agent                   start the default coding agent in a new Terminal window
+//   winarchy agent set <name>        pick the default agent (claude, codex, opencode, ...)
 //
 // Running a menu mode while a menu is open closes it, so hotkeys toggle.
 // Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
@@ -489,6 +491,7 @@ static class Program
         if (first == "toggle") { Toggles.Run(args.Length > 1 ? args[1].ToLowerInvariant() : "", Dir); return; }
         if (first == "remind") { Toggles.Remind(args, Dir); return; }
         if (first == "panel") { Toggles.Panel(args.Length > 1 ? args[1].ToLowerInvariant() : ""); return; }
+        if (first == "agent") { Toggles.Agent(args, Dir); return; }
         if (first == "launch")
         {
             Prepared = Launcher.Run(args);
@@ -929,6 +932,21 @@ static class Program
                         Args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\" " + id
                     });
                 }
+        }
+        else if (n.Provider == "agents")
+        {
+            // Coding agents for the default-agent key (Super+Shift+Ctrl+A); the installed ones first.
+            string current = Toggles.DefaultAgent(Dir);
+            foreach (var a in Toggles.Agents.OrderBy(a => Toggles.Installed(a[0]) ? 0 : 1))
+            {
+                bool installed = Toggles.Installed(a[0]);
+                n.Items.Add(new Node
+                {
+                    Label = a[1], Key = "agent:" + a[0], Parent = n,
+                    Hint = a[0] == current ? "default" : installed ? a[0] : "not installed",
+                    Run = Application.ExecutablePath, Args = "agent set " + a[0]
+                });
+            }
         }
         else if (n.Provider == "settings")
         {

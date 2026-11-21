@@ -50,6 +50,86 @@ static class Toggles
         catch { }
     }
 
+    // ── Default agent ─────────────────────────────────────────────────────────
+    // Omarchy's Super+Shift+Ctrl+A: the coding agent you picked, in its own Terminal window.
+    // { command, name }; the command must be on PATH.
+    public static readonly string[][] Agents =
+    {
+        new[] { "claude", "Claude Code" },
+        new[] { "codex", "Codex" },
+        new[] { "opencode", "OpenCode" },
+        new[] { "gemini", "Gemini CLI" },
+        new[] { "copilot", "GitHub Copilot CLI" },
+        new[] { "cursor-agent", "Cursor Agent" },
+        new[] { "amp", "Amp" },
+        new[] { "qwen", "Qwen Code" },
+    };
+
+    public static bool Installed(string command)
+    {
+        string exts = Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT";
+        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'))
+        {
+            if (dir.Trim().Length == 0) continue;
+            foreach (string ext in exts.Split(';'))
+                try { if (File.Exists(Path.Combine(dir.Trim(), command + ext))) return true; } catch { }
+        }
+        return false;
+    }
+
+    static string SettingsPath(string dir) { return Path.Combine(dir, "settings.json"); }
+
+    // The picked agent, or the first installed one.
+    public static string DefaultAgent(string dir)
+    {
+        try
+        {
+            var s = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(SettingsPath(dir), Encoding.UTF8)) as Dictionary<string, object>;
+            object v;
+            if (s != null && s.TryGetValue("defaultAgent", out v) && v is string && ((string)v).Length > 0) return (string)v;
+        }
+        catch { }
+        foreach (var a in Agents) if (Installed(a[0])) return a[0];
+        return "";
+    }
+
+    public static void Agent(string[] args, string dir)
+    {
+        string verb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
+        if (verb == "set" && args.Length > 2)
+        {
+            string name = args[2].ToLowerInvariant();
+            var agent = Agents.FirstOrDefault(a => a[0] == name);
+            if (agent == null) { MessageBox.Show("Unknown agent: " + name, "winarchy"); return; }
+            if (!Installed(name))
+            {
+                MessageBox.Show(agent[1] + " isn't installed (no `" + name + "` command on PATH). Install it, then pick it again.", "winarchy");
+                return;
+            }
+            // Merge into settings.json, which winarchy-daemon and theme.ps1 also use.
+            var json = new JavaScriptSerializer();
+            Dictionary<string, object> s = null;
+            try { s = json.DeserializeObject(File.ReadAllText(SettingsPath(dir), Encoding.UTF8)) as Dictionary<string, object>; } catch { }
+            if (s == null) s = new Dictionary<string, object>();
+            s["defaultAgent"] = name;
+            var sb = new StringBuilder("{\n");
+            int i = 0;
+            foreach (var kv in s) sb.Append("  \"" + kv.Key + "\": " + json.Serialize(kv.Value) + (++i < s.Count ? ",\n" : "\n"));
+            File.WriteAllText(SettingsPath(dir), sb.Append("}\n").ToString(), new UTF8Encoding(false));
+            return;
+        }
+        string command = DefaultAgent(dir);
+        if (command.Length == 0 || !Installed(command))
+        {
+            MessageBox.Show("No coding agent found. Install Claude Code, Codex or another agent, then pick it in the menu: AI > Default agent.", "winarchy");
+            return;
+        }
+        var label = Agents.FirstOrDefault(a => a[0] == command);
+        // cmd /c finds both .exe agents and npm's .cmd shims; the window closes when the agent exits.
+        Process.Start(new ProcessStartInfo("wt.exe", "-w new nt -d \"" + Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +
+            "\" --title \"" + (label != null ? label[1] : command) + "\" cmd /c " + command) { UseShellExecute = true });
+    }
+
     static void Daemon(string eventName)
     {
         EventWaitHandle ev;

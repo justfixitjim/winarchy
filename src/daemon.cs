@@ -81,6 +81,7 @@ static class Daemon
             nightTimer.Start();
             OnEvent(@"Local\winarchy-daemon-awake", delegate
             {
+                settings = LoadSettings(); // others (winarchy.exe, theme.ps1) write this file too
                 bool on = !Flag("stayAwake", false);
                 settings["stayAwake"] = on;
                 SaveSettings();
@@ -88,6 +89,7 @@ static class Daemon
             });
             OnEvent(@"Local\winarchy-daemon-nightlight", delegate
             {
+                settings = LoadSettings();
                 bool on = !Flag("nightLight", false);
                 settings["nightLight"] = on;
                 SaveSettings();
@@ -111,6 +113,7 @@ static class Daemon
             });
             OnEvent(@"Local\winarchy-daemon-taskbar", delegate
             {
+                settings = LoadSettings();
                 bool hide = !Flag("hideTaskbar", true);
                 settings["hideTaskbar"] = hide;
                 SaveSettings();

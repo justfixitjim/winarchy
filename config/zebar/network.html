@@ -52,6 +52,27 @@
           </button>`;
       }
 
+      // The connected Wi-Fi network's password: hidden until asked for, then click to copy.
+      function WifiPassword() {
+        const [pw, setPw] = useState(null);   // null = hidden, then { password, open, error }
+        const [copied, setCopied] = useState(false);
+        const [busy, setBusy] = useState(false);
+        const reveal = () => { setBusy(true); ps(['password']).then(setPw).catch(() => setPw({ error: 'unavailable' })).finally(() => setBusy(false)); };
+        const copy = () => {
+          if (!pw?.password) return;
+          navigator.clipboard.writeText(pw.password).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {});
+        };
+        const value = busy ? 'reading...' : !pw ? 'show' : pw.password ? (copied ? 'copied' : pw.password)
+          : pw.open ? 'none (open network)' : pw.error || 'not saved';
+        return html`
+          <div class=${`row copyable ${!pw ? 'reveal' : ''}`} onClick=${!pw ? reveal : copy}
+            title=${!pw ? 'Show the saved password' : pw.password ? 'Click to copy' : ''}>
+            <span class="key">Password</span>
+            <span class="value">${value}</span>
+            ${pw && html`<button class="link hide" title="Hide" onClick=${e => { e.stopPropagation(); setPw(null); }}><i class="nf nf-md-eye_off_outline"></i></button>`}
+          </div>`;
+      }
+
       const signalIcon = s => s >= 80 ? 'nf-md-wifi_strength_4' : s >= 55 ? 'nf-md-wifi_strength_3'
         : s >= 30 ? 'nf-md-wifi_strength_2' : 'nf-md-wifi_strength_1';
       const ipv6 = list => (list || []).find(a => !/^fe80/i.test(a));
@@ -100,6 +121,7 @@
               <div class="rows">
                 ${wifi && html`<${Row} label="Signal" value=${gateway?.signalStrength != null ? `${gateway.signalStrength}%` : ''} copy=${false} />`}
                 ${wifi && html`<${Row} label="Band" value=${[link.band, link.channel && `channel ${link.channel}`].filter(Boolean).join(', ')} copy=${false} />`}
+                ${wifi && html`<${WifiPassword} />`}
                 <${Row} label="Speed" value=${wifi ? link.rate || a.speed : a.speed} copy=${false} />
                 <${Row} label="IPv4" value=${iface?.ipv4Addresses?.[0]} />
                 <${Row} label="IPv6" value=${ipv6(iface?.ipv6Addresses)} />
