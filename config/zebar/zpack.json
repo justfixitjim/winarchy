@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
   "name": "winarchy",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "winarchy top bar: GlazeWM workspaces, clock, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
   "tags": [
     "topbar",
@@ -20,7 +20,8 @@
       "transparent": true,
       "includeFiles": [
         "*.html",
-        "*.css"
+        "*.css",
+        "vendor/*"
       ],
       "caching": {
         "defaultDuration": 604800,
@@ -91,7 +92,8 @@
       "transparent": true,
       "includeFiles": [
         "*.html",
-        "*.css"
+        "*.css",
+        "vendor/*"
       ],
       "caching": {
         "defaultDuration": 604800,
@@ -138,7 +140,8 @@
       "transparent": true,
       "includeFiles": [
         "*.html",
-        "*.css"
+        "*.css",
+        "vendor/*"
       ],
       "caching": {
         "defaultDuration": 604800,
@@ -189,7 +192,8 @@
       "transparent": true,
       "includeFiles": [
         "*.html",
-        "*.css"
+        "*.css",
+        "vendor/*"
       ],
       "caching": {
         "defaultDuration": 604800,
@@ -227,7 +231,8 @@
       "transparent": true,
       "includeFiles": [
         "*.html",
-        "*.css"
+        "*.css",
+        "vendor/*"
       ],
       "caching": {
         "defaultDuration": 604800,

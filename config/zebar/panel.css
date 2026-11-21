@@ -1,5 +1,5 @@
 /* winarchy AI panel. Colours come from theme.css (rewritten by `winarchy theme`). */
-@import 'https://www.nerdfonts.com/assets/css/webfont.css';
+@import './vendor/nerd-fonts.css';  /* local copy (vendor/build.ps1) */
 @import './theme.css';
 
 html,

@@ -2,3 +2,4 @@
 *.pdb
 bin/
 tools/zxing.dll
+vendor/node_modules/

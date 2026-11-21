@@ -266,7 +266,7 @@ Step 'Installing the winarchy top bar (Zebar)'
 $zebarDir = Join-Path $glzr 'zebar'
 $pack = Join-Path $zebarDir 'winarchy'
 New-Item -ItemType Directory -Force -Path $pack | Out-Null
-Copy-Item "$here\config\zebar\*" $pack -Force
+Copy-Item "$here\config\zebar\*" $pack -Recurse -Force   # includes vendor\ (libraries and icon font)
 $unit = 'F'; if ($Celsius) { $unit = 'C' }
 # The bar's logo button runs winarchy.exe; Zebar only allows a program whose path in the
 # HTML exactly matches the one whitelisted in zpack.json, so both get the same string.

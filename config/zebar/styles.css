@@ -2,7 +2,7 @@
  * Import the Nerdfonts icon font.
  * Ref https://www.nerdfonts.com/cheat-sheet for a cheatsheet of available Nerdfonts icons.
  */
-@import 'https://www.nerdfonts.com/assets/css/webfont.css';
+@import './vendor/nerd-fonts.css';  /* local copy (vendor/build.ps1) */
 /* Colours come from theme.css, which `winarchy theme` rewrites (Tokyo Night by default). */
 @import './theme.css';
 

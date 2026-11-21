@@ -6,24 +6,17 @@
 
     <!-- Custom styles. -->
     <link rel="stylesheet" type="text/css" href="./styles.css" />
-
-    <!-- Allows React to be run buildless via "text/babel" script below. -->
-    <script
-      src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"
-      integrity="sha256-aS0B0wnsaDByLfE16h4MDCP1fQFccysd1YWOcV+gbBo="
-      crossorigin="anonymous"
-    ></script>
   </head>
   <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
-      import React, {
-        useState,
-        useEffect,
-      } from 'https://esm.sh/react@18.3.1';
-      import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
-      import * as zebar from 'https://esm.sh/zebar@3.3.1';
+    <!-- Plain JavaScript with htm templates (no in-browser compiling), and every library from the
+         local vendor folder, so the bar starts fast and works without internet. -->
+    <script type="module">
+      import { React, createRoot, htm, zebar } from './vendor/ui.mjs';
+      const { useState, useEffect } = React;
+      const html = htm.bind(React.createElement);
+      const Fragment = React.Fragment;
 
       // Temperature unit for the weather readout: 'F' (Fahrenheit) or 'C' (Celsius).
       // winarchy's install.ps1 sets this; pass -Celsius to it for Celsius.
@@ -97,31 +90,28 @@
         const rec = live.find(isRecording);
         const icons = live.filter(i => !isRecording(i));
         if (!icons.length && !rec) return null;
-        return (
-          <div className={`tray ${open ? 'open' : ''}`}>
-            {rec && <Recording key={rec.id} icon={rec} systray={systray} />}
-            {open && icons.map(icon => (
+        return html`
+          <div className=${`tray ${open ? 'open' : ''}`}>
+            ${rec && html`<${Recording} key=${rec.id} icon=${rec} systray=${systray} />`}
+            ${open && icons.map(icon => html`
               <img
-                key={icon.id}
+                key=${icon.id}
                 className="tray-icon"
-                src={icon.iconUrl}
-                title={`${icon.tooltip || ''}\nRight-click for its menu (Quit, Exit)`}
-                onClick={() => systray.onLeftClick(icon.id)}
-                onDoubleClick={() => systray.onLeftDoubleClick(icon.id)}
-                onContextMenu={e => { e.preventDefault(); systray.onRightClick(icon.id); }}
-                onAuxClick={e => e.button === 1 && systray.onMiddleClick(icon.id)}
-                onMouseEnter={() => systray.onHoverEnter(icon.id)}
-                onMouseLeave={() => systray.onHoverLeave(icon.id)}
-              />
-            ))}
-            {icons.length > 0 && (
-              <button className="tray-toggle" title={open ? 'Hide tray icons' : 'Show tray icons'} onClick={toggle}>
-                <i className={`nf ${open ? 'nf-md-chevron_right' : 'nf-md-chevron_left'}`}></i>
-                {!open && <span> {icons.length}</span>}
-              </button>
-            )}
-          </div>
-        );
+                src=${icon.iconUrl}
+                title=${`${icon.tooltip || ''}\nRight-click for its menu (Quit, Exit)`}
+                onClick=${() => systray.onLeftClick(icon.id)}
+                onDoubleClick=${() => systray.onLeftDoubleClick(icon.id)}
+                onContextMenu=${e => { e.preventDefault(); systray.onRightClick(icon.id); }}
+                onAuxClick=${e => e.button === 1 && systray.onMiddleClick(icon.id)}
+                onMouseEnter=${() => systray.onHoverEnter(icon.id)}
+                onMouseLeave=${() => systray.onHoverLeave(icon.id)}
+              />`)}
+            ${icons.length > 0 && html`
+              <button className="tray-toggle" title=${open ? 'Hide tray icons' : 'Show tray icons'} onClick=${toggle}>
+                <i className=${`nf ${open ? 'nf-md-chevron_right' : 'nf-md-chevron_left'}`}></i>
+                ${!open && html`<span> ${icons.length}</span>`}
+              </button>`}
+          </div>`;
       }
 
       // Screen recording (tools/record.ps1) keeps a tray icon with this text while it runs.
@@ -135,11 +125,10 @@
           return () => clearInterval(timer);
         }, []);
         const s = Math.floor((Date.now() - start) / 1000);
-        return (
-          <button className="rec" title="Recording this screen. Click or press Super+Alt+R to stop." onClick={() => systray.onLeftClick(icon.id)}>
-            <span className="rec-dot"></span>REC {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
-          </button>
-        );
+        return html`
+          <button className="rec" title="Recording this screen. Click or press Super+Alt+R to stop." onClick=${() => systray.onLeftClick(icon.id)}>
+            <span className="rec-dot"></span>REC ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}
+          </button>`;
       }
 
       // CPU, RAM and video memory together; click for the process panel (a slim task manager).
@@ -167,16 +156,13 @@
           vp != null && `VRAM ${gb(vram.vramUsed)} / ${gb(vram.vramTotal)} GB`,
           'Click for processes',
         ].filter(Boolean).join('\n');
-        return (
-          <button className="stats" title={tip} onClick={() => zebar.startWidgetPreset('processes', 'panel').catch(console.error)}>
-            {cpu && <span className="stat"><i className="nf nf-oct-cpu"></i><span className={level(cpu.usage)}>{Math.round(cpu.usage)}%</span></span>}
-            {memory && <span className="stat"><i className="nf nf-fae-chip"></i><span className={level(memory.usage)}>{Math.round(memory.usage)}%</span></span>}
-            {vp != null && <span className="stat"><i className="nf nf-md-expansion_card vram-icon"></i><span className={level(vp)}>{Math.round(vp)}%</span></span>}
-          </button>
-        );
+        return html`
+          <button className="stats" title=${tip} onClick=${() => zebar.startWidgetPreset('processes', 'panel').catch(console.error)}>
+            ${cpu && html`<span className="stat"><i className="nf nf-oct-cpu"></i><span className=${level(cpu.usage)}>${Math.round(cpu.usage)}%</span></span>`}
+            ${memory && html`<span className="stat"><i className="nf nf-fae-chip"></i><span className=${level(memory.usage)}>${Math.round(memory.usage)}%</span></span>`}
+            ${vp != null && html`<span className="stat"><i className="nf nf-md-expansion_card vram-icon"></i><span className=${level(vp)}>${Math.round(vp)}%</span></span>`}
+          </button>`;
       }
-
-      createRoot(document.getElementById('root')).render(<App />);
 
       // Volume: scroll to change, click the icon to mute, drag the slider (shown on
       // hover), right-click for Windows sound settings.
@@ -189,22 +175,21 @@
           : volume < 34 ? 'nf-md-volume_low'
           : volume < 67 ? 'nf-md-volume_medium'
           : 'nf-md-volume_high';
-        return (
+        // Slider first: the bar is right-aligned, so it grows leftward and the icon stays under the cursor.
+        return html`
           <div
-            className={`volume ${device.isMuted ? 'muted' : ''}`}
-            title={device.name}
-            onWheel={e => set(volume + (e.deltaY < 0 ? 2 : -2))}
-            onContextMenu={e => { e.preventDefault(); run('explorer.exe', 'ms-settings:sound'); }}
+            className=${`volume ${device.isMuted ? 'muted' : ''}`}
+            title=${device.name}
+            onWheel=${e => set(volume + (e.deltaY < 0 ? 2 : -2))}
+            onContextMenu=${e => { e.preventDefault(); run('explorer.exe', 'ms-settings:sound'); }}
           >
-            {/* Slider first: the bar is right-aligned, so it grows leftward and the icon stays under the cursor. */}
             <input
-              type="range" min="0" max="100" value={volume}
-              onChange={e => set(Number(e.target.value))}
+              type="range" min="0" max="100" value=${volume}
+              onChange=${e => set(Number(e.target.value))}
             />
-            <button className={`nf ${icon}`} onClick={() => audio.setMute(!device.isMuted)}></button>
-            <span>{volume}%</span>
-          </div>
-        );
+            <button className=${`nf ${icon}`} onClick=${() => audio.setMute(!device.isMuted)}></button>
+            <span>${volume}%</span>
+          </div>`;
       }
 
       // VPN: shows whether the Windows VPN connection is up; click to connect or disconnect
@@ -264,15 +249,14 @@
           : state === 'error' ? 'nf-md-shield_alert_outline'
           : 'nf-md-shield_off_outline';
         const label = state === 'connected' ? 'VPN on' : state === 'busy' ? 'VPN...' : 'VPN off';
-        return (
+        return html`
           <button
-            className={`vpn ${state}`}
-            title={`${VPN_NAME}: ${state}${detail ? ' - ' + detail : ''}\nClick to ${state === 'connected' ? 'disconnect' : 'connect'}`}
-            onClick={() => state !== 'busy' && toggle()}
+            className=${`vpn ${state}`}
+            title=${`${VPN_NAME}: ${state}${detail ? ' - ' + detail : ''}\nClick to ${state === 'connected' ? 'disconnect' : 'connect'}`}
+            onClick=${() => state !== 'busy' && toggle()}
           >
-            <i className={`nf ${icon}`}></i> {label}
-          </button>
-        );
+            <i className=${`nf ${icon}`}></i> ${label}
+          </button>`;
       }
 
       // AI usage: the active account's share of its 5-hour / weekly limits per agent, coloured
@@ -319,23 +303,51 @@
             (a.stale ? ' [old]' : '') + (a.status !== 'ok' && (a.session || a.weekly) ? ` - ${a.status}` : '')).join('\n')
         ).join('\n\n') + '\n\nClick for details and switching';
 
-        return (
-          <button className="agents" title={tip} onClick={() => zebar.startWidgetPreset('agents', 'panel').catch(console.error)}>
+        return html`
+          <button className="agents" title=${tip} onClick=${() => zebar.startWidgetPreset('agents', 'panel').catch(console.error)}>
             <i className="nf nf-md-robot_outline"></i>
-            {providers.map(p => {
+            ${providers.map(p => {
               const a = p.accounts.find(x => x.active) || p.accounts[0];
               const peak = a.peak;
               const level = peak == null ? 'unknown' : peak >= p.threshold ? 'high' : peak >= p.threshold - 20 ? 'mid' : 'low';
-              return (
-                <span key={p.id} className={`agent ${level}`}>
-                  {p.name} {peak == null ? '-' : `${Math.round(peak)}%`}
-                  {p.accounts.length > 1 ? <sup>{p.accounts.indexOf(a) + 1}</sup> : null}
-                </span>
-              );
+              return html`
+                <span key=${p.id} className=${`agent ${level}`}>
+                  ${p.name} ${peak == null ? '-' : `${Math.round(peak)}%`}
+                  ${p.accounts.length > 1 ? html`<sup>${p.accounts.indexOf(a) + 1}</sup>` : null}
+                </span>`;
             })}
-          </button>
-        );
+          </button>`;
       }
+
+      // Icon for the current network status.
+      function networkIcon(net) {
+        switch (net.defaultInterface?.type) {
+          case 'ethernet': return 'nf-md-ethernet_cable';
+          case 'proprietary_virtual': return 'nf-md-shield_lock_outline';
+          case 'wifi': {
+            const s = net.defaultGateway?.signalStrength;
+            return s >= 80 ? 'nf-md-wifi_strength_4' : s >= 65 ? 'nf-md-wifi_strength_3'
+              : s >= 40 ? 'nf-md-wifi_strength_2' : s >= 25 ? 'nf-md-wifi_strength_1' : 'nf-md-wifi_strength_outline';
+          }
+          default: return 'nf-md-wifi_strength_off_outline';
+        }
+      }
+
+      // Icon for how much of the battery is charged.
+      function batteryIcon(b) {
+        const p = b.chargePercent;
+        return p > 90 ? 'nf-fa-battery_4' : p > 70 ? 'nf-fa-battery_3' : p > 40 ? 'nf-fa-battery_2' : p > 20 ? 'nf-fa-battery_1' : 'nf-fa-battery_0';
+      }
+
+      // Icon for the current weather.
+      const WEATHER_ICONS = {
+        clear_day: 'nf-weather-day_sunny', clear_night: 'nf-weather-night_clear',
+        cloudy_day: 'nf-weather-day_cloudy', cloudy_night: 'nf-weather-night_alt_cloudy',
+        light_rain_day: 'nf-weather-day_sprinkle', light_rain_night: 'nf-weather-night_alt_sprinkle',
+        heavy_rain_day: 'nf-weather-day_rain', heavy_rain_night: 'nf-weather-night_alt_rain',
+        snow_day: 'nf-weather-day_snow', snow_night: 'nf-weather-night_alt_snow',
+        thunder_day: 'nf-weather-day_lightning', thunder_night: 'nf-weather-night_alt_lightning',
+      };
 
       function App() {
         const [output, setOutput] = useState(providers.outputMap);
@@ -344,199 +356,91 @@
           providers.onOutput(() => setOutput(providers.outputMap));
         }, []);
 
-        // Get icon to show for current network status.
-        function getNetworkIcon(networkOutput) {
-          switch (networkOutput.defaultInterface?.type) {
-            case 'ethernet':
-              return <i className="nf nf-md-ethernet_cable"></i>;
-            case 'proprietary_virtual':
-              return <i className="nf nf-md-shield_lock_outline"></i>;
-            case 'wifi':
-              if (networkOutput.defaultGateway?.signalStrength >= 80) {
-                return <i className="nf nf-md-wifi_strength_4"></i>;
-              } else if (
-                networkOutput.defaultGateway?.signalStrength >= 65
-              ) {
-                return <i className="nf nf-md-wifi_strength_3"></i>;
-              } else if (
-                networkOutput.defaultGateway?.signalStrength >= 40
-              ) {
-                return <i className="nf nf-md-wifi_strength_2"></i>;
-              } else if (
-                networkOutput.defaultGateway?.signalStrength >= 25
-              ) {
-                return <i className="nf nf-md-wifi_strength_1"></i>;
-              } else {
-                return <i className="nf nf-md-wifi_strength_outline"></i>;
-              }
-            default:
-              return (
-                <i className="nf nf-md-wifi_strength_off_outline"></i>
-              );
-          }
-        }
-
-        // Get icon to show for how much of the battery is charged.
-        function getBatteryIcon(batteryOutput) {
-          if (batteryOutput.chargePercent > 90)
-            return <i className="nf nf-fa-battery_4"></i>;
-          if (batteryOutput.chargePercent > 70)
-            return <i className="nf nf-fa-battery_3"></i>;
-          if (batteryOutput.chargePercent > 40)
-            return <i className="nf nf-fa-battery_2"></i>;
-          if (batteryOutput.chargePercent > 20)
-            return <i className="nf nf-fa-battery_1"></i>;
-          return <i className="nf nf-fa-battery_0"></i>;
-        }
-
-        // Get icon to show for current weather status.
-        function getWeatherIcon(weatherOutput) {
-          switch (weatherOutput.status) {
-            case 'clear_day':
-              return <i className="nf nf-weather-day_sunny"></i>;
-            case 'clear_night':
-              return <i className="nf nf-weather-night_clear"></i>;
-            case 'cloudy_day':
-              return <i className="nf nf-weather-day_cloudy"></i>;
-            case 'cloudy_night':
-              return <i className="nf nf-weather-night_alt_cloudy"></i>;
-            case 'light_rain_day':
-              return <i className="nf nf-weather-day_sprinkle"></i>;
-            case 'light_rain_night':
-              return <i className="nf nf-weather-night_alt_sprinkle"></i>;
-            case 'heavy_rain_day':
-              return <i className="nf nf-weather-day_rain"></i>;
-            case 'heavy_rain_night':
-              return <i className="nf nf-weather-night_alt_rain"></i>;
-            case 'snow_day':
-              return <i className="nf nf-weather-day_snow"></i>;
-            case 'snow_night':
-              return <i className="nf nf-weather-night_alt_snow"></i>;
-            case 'thunder_day':
-              return <i className="nf nf-weather-day_lightning"></i>;
-            case 'thunder_night':
-              return <i className="nf nf-weather-night_alt_lightning"></i>;
-          }
-        }
-
-        return (
+        const wm = output.glazewm;
+        return html`
           <div className="app">
             <div className="left">
-              {/* Like Omarchy's logo: opens the winarchy menu (same as Super+Alt+Space). */}
+              <!-- Like Omarchy's logo: opens the winarchy menu (same as Super+Alt+Space). -->
               <button
                 className="logo nf nf-fa-windows"
                 title="winarchy menu (Super+Alt+Space)"
-                onClick={() => run(WINARCHY)}
+                onClick=${() => run(WINARCHY)}
               ></button>
-              {output.glazewm && (
+              ${wm && html`
                 <div className="workspaces">
-                  {output.glazewm.currentWorkspaces.map(workspace => (
+                  ${wm.currentWorkspaces.map(workspace => html`
                     <button
-                      className={`workspace ${workspace.hasFocus && 'focused'} ${workspace.isDisplayed && 'displayed'}`}
-                      onClick={() =>
-                        output.glazewm.runCommand(
-                          `focus --workspace ${workspace.name}`,
-                        )
-                      }
-                      key={workspace.name}
+                      className=${`workspace ${workspace.hasFocus && 'focused'} ${workspace.isDisplayed && 'displayed'}`}
+                      onClick=${() => wm.runCommand(`focus --workspace ${workspace.name}`)}
+                      key=${workspace.name}
                     >
-                      {workspace.displayName ?? workspace.name}
-                    </button>
-                  ))}
-                </div>
-              )}
+                      ${workspace.displayName ?? workspace.name}
+                    </button>`)}
+                </div>`}
             </div>
 
-            <div className="center">{output.date?.formatted}</div>
+            <div className="center">${output.date?.formatted}</div>
 
             <div className="right">
-              {output.glazewm && (
-                <>
-                  {output.glazewm.isPaused && (
-                    <button
-                      className="paused-button"
-                      onClick={() =>
-                        output.glazewm.runCommand('wm-toggle-pause')
-                      }
-                    >
-                      PAUSED
-                    </button>
-                  )}
-                  {output.glazewm.bindingModes.map(bindingMode => (
+              ${wm && html`
+                <${Fragment}>
+                  ${wm.isPaused && html`
+                    <button className="paused-button" onClick=${() => wm.runCommand('wm-toggle-pause')}>PAUSED</button>`}
+                  ${wm.bindingModes.map(bindingMode => html`
                     <button
                       className="binding-mode"
-                      key={bindingMode.name}
-                      onClick={() =>
-                        output.glazewm.runCommand(
-                          `wm-disable-binding-mode --name ${bindingMode.name}`,
-                        )
-                      }
+                      key=${bindingMode.name}
+                      onClick=${() => wm.runCommand(`wm-disable-binding-mode --name ${bindingMode.name}`)}
                     >
-                      {bindingMode.displayName ?? bindingMode.name}
-                    </button>
-                  ))}
-
+                      ${bindingMode.displayName ?? bindingMode.name}
+                    </button>`)}
                   <button
-                    className={`tiling-direction nf ${
-                      output.glazewm.tilingDirection === 'horizontal'
-                        ? 'nf-md-swap_horizontal'
-                        : 'nf-md-swap_vertical'
-                    }`}
-                    onClick={() =>
-                      output.glazewm.runCommand('toggle-tiling-direction')
-                    }
+                    className=${`tiling-direction nf ${wm.tilingDirection === 'horizontal' ? 'nf-md-swap_horizontal' : 'nf-md-swap_vertical'}`}
+                    onClick=${() => wm.runCommand('toggle-tiling-direction')}
                   ></button>
-                </>
-              )}
+                <//>`}
 
-              <Agents />
+              <${Agents} />
 
-              {output.systray && <Tray systray={output.systray} />}
+              ${output.systray && html`<${Tray} systray=${output.systray} />`}
 
-              {VPN_NAME && <Vpn />}
+              ${VPN_NAME && html`<${Vpn} />`}
 
-              {output.audio?.defaultPlaybackDevice && (
-                <Volume audio={output.audio} />
-              )}
+              ${output.audio?.defaultPlaybackDevice && html`<${Volume} audio=${output.audio} />`}
 
-              {output.network && (
+              ${output.network && html`
                 <button
                   className="network"
-                  title={`${output.network.defaultInterface?.ipv4Addresses?.[0] || 'Not connected'}\nClick for network details and Wi-Fi / wired switches`}
-                  onClick={() => zebar.startWidgetPreset('network', 'panel').catch(console.error)}
+                  title=${`${output.network.defaultInterface?.ipv4Addresses?.[0] || 'Not connected'}\nClick for network details and Wi-Fi / wired switches`}
+                  onClick=${() => zebar.startWidgetPreset('network', 'panel').catch(console.error)}
                 >
-                  {getNetworkIcon(output.network)}
-                  {output.network.defaultGateway?.ssid}
-                </button>
-              )}
+                  <i className=${`nf ${networkIcon(output.network)}`}></i>
+                  ${output.network.defaultGateway?.ssid}
+                </button>`}
 
-              {(output.cpu || output.memory) && <Stats cpu={output.cpu} memory={output.memory} />}
+              ${(output.cpu || output.memory) && html`<${Stats} cpu=${output.cpu} memory=${output.memory} />`}
 
-              {output.battery && (
+              ${output.battery && html`
                 <div className="battery">
-                  {/* Show icon for whether battery is charging. */}
-                  {output.battery.isCharging && (
-                    <i className="nf nf-md-power_plug charging-icon"></i>
-                  )}
-                  {getBatteryIcon(output.battery)}
-                  {Math.round(output.battery.chargePercent)}%
-                </div>
-              )}
+                  ${output.battery.isCharging && html`<i className="nf nf-md-power_plug charging-icon"></i>`}
+                  <i className=${`nf ${batteryIcon(output.battery)}`}></i>
+                  ${Math.round(output.battery.chargePercent)}%
+                </div>`}
 
-              {output.weather && (
+              ${output.weather && html`
                 <button
                   className="weather"
                   title="Click for the forecast"
-                  onClick={() => zebar.startWidgetPreset('weather', 'panel').catch(console.error)}
+                  onClick=${() => zebar.startWidgetPreset('weather', 'panel').catch(console.error)}
                 >
-                  {getWeatherIcon(output.weather)}
-                  {Math.round(TEMP_UNIT === 'C' ? output.weather.celsiusTemp : output.weather.fahrenheitTemp)}°{TEMP_UNIT}
-                </button>
-              )}
+                  <i className=${`nf ${WEATHER_ICONS[output.weather.status] || 'nf-weather-cloudy'}`}></i>
+                  ${Math.round(TEMP_UNIT === 'C' ? output.weather.celsiusTemp : output.weather.fahrenheitTemp)}°${TEMP_UNIT}
+                </button>`}
             </div>
-          </div>
-        );
+          </div>`;
       }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
     </script>
   </body>
 </html>
