@@ -82,6 +82,7 @@ body,
 .tiling-direction,
 .paused-button,
 .network,
+.bluetooth,
 .stats,
 .battery {
   margin-right: 20px;
@@ -296,7 +297,9 @@ body,
 }
 
 .weather,
-.network {
+.network,
+.bluetooth,
+.clock {
   background: none;
   border: none;
   color: inherit;
@@ -329,4 +332,51 @@ body,
   .high { color: var(--wa-red); }
   .unknown { color: color-mix(in srgb, var(--wa-fg) 55%, transparent); }
   &:hover i { color: var(--wa-accent); }
+}
+
+/* Centre: clock (click for the calendar and reminders), indicators, now playing. */
+.center { gap: 14px; white-space: nowrap; }
+.clock:hover { color: var(--wa-accent); }
+.bluetooth.off { opacity: 0.55; }
+
+.indicators {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .indicator {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--wa-accent);
+    font-size: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    i { margin-right: 3px; }
+    &:hover { color: var(--wa-fg); }
+  }
+  /* Off toggles appear only while hovering the group (Omarchy's "peek"). */
+  .indicator.off { display: none; color: color-mix(in srgb, var(--wa-fg) 40%, transparent); }
+  &:hover .indicator.off { display: inline-block; }
+  .peek { color: color-mix(in srgb, var(--wa-fg) 25%, transparent); cursor: default; }
+  &:hover .peek { display: none; }
+}
+
+.media {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: color-mix(in srgb, var(--wa-fg) 70%, transparent);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+
+  &.playing { color: var(--wa-fg); }
+  &.playing i { color: var(--wa-accent); }
+  &:hover { color: var(--wa-accent); }
+  .media-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

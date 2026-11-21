@@ -148,7 +148,7 @@ if (Get-Process glazewm -ErrorAction SilentlyContinue) {
 }
 $daemon = Join-Path $dest 'winarchy-daemon.exe'
 if (Test-Path $daemon) { & $daemon --stop; Start-Sleep -Milliseconds 800 }
-Get-Process winarchy, winarchy-daemon, winarchy-top, winarchy-menu, winarchy-autotile -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process winarchy, winarchy-daemon, winarchy-top, winarchy-audio, winarchy-menu, winarchy-autotile -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 300
 
 # --- 3. Build the helpers ----------------------------------------------------------
@@ -158,13 +158,17 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $csc)) { throw ".NET Framework C# compiler not found at $csc" }
 $common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
 & $csc @common "/out:$dest\winarchy.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-    /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Data.dll "$here\src\winarchy.cs"
+    /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Data.dll `
+    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
-& $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
+& $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
 # Process stats for the bar and its process panel (a console program: Zebar reads its output).
-& $csc /nologo /codepage:65001 /optimize+ /target:exe "/out:$dest\winarchy-top.exe" "$here\src\top.cs"
+& $csc /nologo /codepage:65001 /optimize+ /target:exe "/out:$dest\winarchy-top.exe" "$here\src\top.cs" "$here\src\quiethours.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-top.exe failed.' }
+# Per-app volume and the default device for the audio panel (also a console program).
+& $csc /nologo /codepage:65001 /optimize+ /target:exe "/out:$dest\winarchy-audio.exe" "$here\src\audio.cs"
+if ($LASTEXITCODE) { throw 'Building winarchy-audio.exe failed.' }
 Copy-Item "$here\README.md" $dest -Force
 
 # Media tools (Trigger > Transcode / Capture, Setup > Network > Wi-Fi QR).
@@ -288,17 +292,28 @@ foreach ($pbk in "$env:APPDATA\Microsoft\Network\Connections\Pbk\rasphone.pbk",
 }
 Note $(if ($VpnName) { "VPN button: $VpnName" } else { 'VPN button: hidden (no Windows VPN connection found)' })
 $jsVpn = $VpnName.Replace('\', '\\').Replace("'", "\'")
-Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{TOP_EXE}}', $topPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
-$agentsHtml = Join-Path $pack 'agents.html'
-Write-Utf8 $agentsHtml ([IO.File]::ReadAllText($agentsHtml).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')))
-$weatherHtml = Join-Path $pack 'weather.html'
-Write-Utf8 $weatherHtml ([IO.File]::ReadAllText($weatherHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';"))
-$processesHtml = Join-Path $pack 'processes.html'
-Write-Utf8 $processesHtml ([IO.File]::ReadAllText($processesHtml).Replace('{{TOP_EXE}}', $topPath.Replace("'", "\'")))
-$networkHtml = Join-Path $pack 'network.html'
-Write-Utf8 $networkHtml ([IO.File]::ReadAllText($networkHtml).Replace('{{NETWORK_PS1}}', (Join-Path $toolsDir 'network.ps1').Replace('\', '\\')))
+$audioPath = (Join-Path $dest 'winarchy-audio.exe').Replace('\', '/')
+# Paths the pages and zpack.json need. Zebar only runs a program whose path in the page exactly
+# matches the one allowed in zpack.json, so both get the same string.
+$paths = [ordered]@{
+    '{{WINARCHY_EXE}}'  = $winarchyPath
+    '{{TOP_EXE}}'       = $topPath
+    '{{AUDIO_EXE}}'     = $audioPath
+    '{{AGENTS_PS1}}'    = (Join-Path $toolsDir 'agents.ps1')
+    '{{NETWORK_PS1}}'   = (Join-Path $toolsDir 'network.ps1')
+    '{{BLUETOOTH_PS1}}' = (Join-Path $toolsDir 'bluetooth.ps1')
+}
+foreach ($page in Get-ChildItem $pack -Filter *.html) {
+    $text = [IO.File]::ReadAllText($page.FullName)
+    foreach ($k in $paths.Keys) { $text = $text.Replace($k, $paths[$k].Replace('\', '\\').Replace("'", "\'")) }
+    $text = $text.Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';")
+    if ($page.Name -eq 'bar.html') { $text = $text.Replace('{{VPN_NAME}}', $jsVpn).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")) }
+    Write-Utf8 $page.FullName $text
+}
 $zpack = Join-Path $pack 'zpack.json'
-Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')).Replace('{{TOP_EXE}}', $topPath.Replace('"', '\"')))
+$text = [IO.File]::ReadAllText($zpack)
+foreach ($k in $paths.Keys) { $text = $text.Replace($k, $paths[$k].Replace('\', '\\').Replace('"', '\"')) }
+Write-Utf8 $zpack $text
 Note "temperature in degrees $unit"
 $zebarSettings = Join-Path $zebarDir 'settings.json'
 $wantStartup = '[{"pack":"winarchy","widget":"bar","preset":"default"}]'

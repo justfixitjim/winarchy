@@ -12,6 +12,9 @@ It's a thin layer over good existing tools:
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
 | Themes (Super+Ctrl+Shift+Space) | Eight themes that recolour borders, bar, menu, Windows, wallpaper, Terminal, VS Code and Firefox |
 | Agents panel | Claude Code and Codex usage in the bar, several accounts, auto-switching near the limit |
+| Audio, Bluetooth, network and clock panels | Click the bar (or Super+Ctrl+A / B / N, Super+Ctrl+Alt+R): pick outputs and set each app's volume, Bluetooth devices with battery, adapters and IPs, a calendar with reminders |
+| Toggles and indicators | Stay awake (Super+Ctrl+I), do not disturb (Super+Ctrl+Alt+,), night light, hide the bar (Super+Shift+Space), no gaps (Super+Shift+Backspace), shown in the bar while on |
+| Quake console (Super+`) | Windows Terminal drops down from the top and hides again |
 | Foot terminal | Windows Terminal made bare like foot: no tabs or title bar, JetBrainsMono Nerd Font, padding, theme colours |
 | herdr (agent workspaces) | [herdr](https://github.com/herdrdev/herdr) on Super+Shift+Enter: AI coding agents side by side, with each one's state in a sidebar |
 | Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
@@ -55,6 +58,12 @@ Re-run it any time to upgrade. Options:
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
 | Super+Ctrl+Shift+Space | Pick a colour theme |
 | Super+Alt+R | Start / stop screen recording |
+| Super+` | Drop-down terminal: show / hide |
+| Super+Ctrl+I | Stay awake (no sleep or screen-off) on / off |
+| Super+Ctrl+Alt+, | Do not disturb on / off |
+| Super+Shift+Space / Super+Shift+Backspace | Hide / show the top bar; window gaps off / on |
+| Super+Ctrl+A / B / N | Audio / Bluetooth / network panel |
+| Super+Ctrl+Alt+R | Calendar and reminders |
 | Super+Enter | Terminal |
 | Super+Shift+Enter | Agent workspace (herdr) |
 | Super+Shift+B / Super+Shift+Alt+B | Default browser / private window |
@@ -121,6 +130,12 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
 - **AI usage** (Claude Code, Codex): see [AI usage and accounts](#ai-usage-and-accounts).
 - **Workspace numbers** switch workspaces when clicked.
+- **Clock** (centre): click for the calendar panel: the month with ISO week numbers (scroll or the arrows change month) and **reminders**. Type what to remind you of, pick 5, 10, 25 or 60 minutes (or type any number) and Add; when it's due a small themed card pops up top right with a chime, until you click it. From a terminal: `winarchy remind add 10 Tea`.
+- **Indicators** (next to the clock): icons for whatever is on: a pending reminder (with its countdown), stay awake, do not disturb, night light. Hover the spot to see the ones that are off too; click any to switch it.
+  - **Stay awake** keeps the PC from sleeping or turning the screen off, until you switch it off again (it survives a restart of GlazeWM).
+  - **Do not disturb** is Windows' own, the same switch as in Settings > System > Notifications.
+  - **Night light** warms the screen to about 4000 K, like Omarchy's. Windows' own night light can't be switched from code on current builds, so winarchy tints the displays itself (screenshots and recordings aren't tinted). Windows' version is still under Trigger > Toggle.
+- **Now playing** (centre, when something plays in Windows' media controls: Spotify, a browser tab, ...): click to play / pause, middle-click for the next track, scroll for next / previous.
 - **System tray** (replaces the hidden taskbar's tray): a `‹ 20`-style count; click it to show the tray icons.
   - Left-click or double-click an icon as you would on the taskbar.
   - Right-click opens the app's own menu; use its Quit or Exit to close a background app.
@@ -140,11 +155,11 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
   - Programs running as administrator, and protected ones, can't be ended from here (the panel says so); Task Manager opens from the top corner.
   - Numbers come from `winarchy-top.exe`, a small helper built from `src\top.cs` that reads them the way Task Manager does. It runs only while the panel is open (plus a light one for the bar's VRAM figure).
 - **Weather** (icon and temperature): click for a short forecast: now (feels-like, today's high and low, wind, humidity, chance of rain, UV, sunrise and sunset), the next 15 hours in 3-hour steps, and 5 days with each day's range on a shared scale. It comes from Open-Meteo, the same source as the bar's temperature, for the location Zebar estimates from your IP address, and shows the last forecast instantly while refreshing (at most every 10 minutes). `-Celsius` switches it to °C and km/h.
-- **Volume:**
-  - Scroll over it to change the volume.
-  - Hover to reveal a slider.
-  - Click the speaker to mute or unmute.
-  - Right-click for Windows sound settings.
+- **Volume:** scroll over it to change the volume, hover for a slider, right-click to mute. Click the speaker for the audio panel:
+  - Every output and input; click one to make it the default (for all apps, like Quick Settings). The one in use has its volume slider and mute.
+  - Each app playing sound with its own volume slider and mute (apps with several audio streams, like Discord or a browser, are one row).
+  - The default-device switch and per-app volume come from `winarchy-audio.exe` (`src\audio.cs`); Windows has no public way to change the default device, so it uses the same interface as every audio-switcher tool.
+- **Bluetooth** (shown when the PC has Bluetooth; a count when more than one device is connected): hover for connected devices and their battery; click for the Bluetooth panel: an on / off switch (like Quick Settings) and every paired device with its battery and whether it's connected. Pairing, connecting and removing devices are in Bluetooth settings, linked from the panel.
 
 ## Terminal and agent workspaces
 
@@ -205,7 +220,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `glaze` for a GlazeWM command.
   - `terminal` for PowerShell run in Windows Terminal.
   - `page` to jump to another page, or `items` for a submenu.
-- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu` and `autotile`. Changes take effect when GlazeWM restarts.
+- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), plus the `stayAwake` and `nightLight` toggles. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
 - **Top bar:** `~\.glzr\zebar\winarchy\bar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
@@ -222,12 +237,17 @@ This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Ter
 
 - **`winarchy.exe`** is a small WinForms app. It provides the menu, the cheat sheet, and launchers that find your default browser and installed apps through the Start menu's app list, so one config works on any PC. GlazeWM starts a resident copy at sign-in (`winarchy.exe --resident`), so Super+Space only has to show a window that's already loaded; if it isn't running, the menu opens the normal way and starts it.
 - **`tools\*.ps1`** are the media tools, the theme switcher (`theme.ps1`) and the AI accounts tool (`agents.ps1`). The bar runs `agents.ps1 usage`, which answers from a cache and only re-checks usage every few minutes.
-- **The bar and its panels** (`config\zebar`) are plain JavaScript pages with htm templates, so nothing is compiled when they open. Their libraries (React, htm, Zebar's client) and the Nerd Fonts icon font are bundled in `config\zebarendor`, so the bar works without internet. `vendoruild.ps1` rebuilds that bundle from the pinned versions in `vendor\package.json` (needs Node.js; only for updating them).
-- **`winarchy-top.exe`** reads CPU, memory and video memory per process for the bar and the process panel.
-- **`winarchy-daemon.exe`** is started by GlazeWM and does three things:
+- **The bar and its panels** (`config\zebar`) are plain JavaScript pages with htm templates, so nothing is compiled when they open. Their libraries (React, htm, Zebar's client) and the Nerd Fonts icon font are bundled in `config\zebar\vendor`, so the bar works without internet. `vendor\build.ps1` rebuilds that bundle from the pinned versions in `vendor\package.json` (needs Node.js; only for updating them).
+- **`winarchy-top.exe`** reads CPU, memory and video memory per process for the bar and the process panel, and every 5 seconds tells the bar which toggles are on.
+- **`winarchy-audio.exe`** sets each app's volume and the default audio device for the audio panel.
+- **`winarchy toggle awake|dnd|nightlight|bar|gaps`**, **`winarchy remind ...`** and **`winarchy panel <name>`** are what the keys, menu items and bar buttons run. Do not disturb goes through the same settings object Windows' Settings app uses; hiding the bar stops Zebar and starts it again (waiting long enough that it doesn't come up grey); gaps rewrites the `gaps:` block of the GlazeWM config and reloads it, keeping your values to put back.
+- **`winarchy-daemon.exe`** is started by GlazeWM and does these things:
   - **Start menu blocking.** GlazeWM swallows Super+key combos, which makes Windows think Super was tapped alone and open Start. The daemon injects an unassigned "mask" key (0xE8) when Super goes down, so that never happens.
   - **Taskbar hiding.** It auto-hides the taskbar, then hides it outright.
   - **Automatic splits.** It listens on GlazeWM's IPC socket and sets each focused window's split direction from its shape, giving Hyprland-style dwindle tiling.
+  - **Stay awake and night light.** It holds Windows' "keep the system and display on" request, and sets each display's colour ramp (re-applying it after sleep or a display change).
+  - **Reminders.** It watches `reminders.json` and pops each one up when it's due.
+  - **Drop-down terminal.** On Super+` it opens Windows Terminal's quake window with the tab title `winarchy-dropdown` (which GlazeWM's window rules ignore, so it isn't tiled), and shows or hides it after that. Terminal also hides it by itself when you click elsewhere.
 
 ## Notes
 

@@ -5,6 +5,8 @@
 # itself (Win+L lock, Win+V clipboard, Win+Shift+S screenshot, Win+Shift+R Snipping Tool recording, Win+E, Win+R,
 # Win+I ...) and those are deliberately left unbound here.
 #
+# Super+` (drop-down terminal) isn't bound here: winarchy-daemon shows and hides it.
+#
 # The comment directly above each keybinding is what the Super+K cheat sheet
 # shows, so keep it short when you add new ones. Reload with Super+Ctrl+R.
 #
@@ -87,6 +89,7 @@ window_rules:
     match:
       - window_process: { equals: 'zebar' }
       - window_process: { equals: 'winarchy' }
+      - window_process: { equals: 'winarchy-daemon' }
       - window_title: { regex: '[Pp]icture.in.[Pp]icture' }
         window_class: { regex: 'Chrome_WidgetWin_1|MozillaDialogClass' }
       - window_process: { equals: 'PowerToys' }
@@ -101,6 +104,13 @@ window_rules:
         window_class: { not_regex: 'OpusApp' }
       - window_process: { equals: 'POWERPNT' }
         window_class: { not_regex: 'PPTFrameClass' }
+
+  # Drop-down terminal (Super+`, opened by winarchy-daemon): drops down instead of tiling.
+  - commands: ['ignore']
+    match:
+      - window_process: { equals: 'WindowsTerminal' }
+        window_title: { equals: 'winarchy-dropdown' }
+    on: ['manage', 'title_change']
 
   # Small utility windows float instead of tiling.
   - commands: ['set-floating --centered']
@@ -164,6 +174,32 @@ keybindings:
   # Power menu (lock, sleep, restart, shut down)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe system']
     bindings: ['lwin+escape']
+
+  # ── Toggles and bar panels ────────────────────────────────────────────
+  # Stay awake (no sleep or screen-off)
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe toggle awake']
+    bindings: ['lwin+ctrl+i']
+  # Do not disturb
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe toggle dnd']
+    bindings: ['lwin+ctrl+alt+oem_comma']
+  # Hide / show the top bar
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe toggle bar']
+    bindings: ['lwin+shift+space']
+  # Window gaps off / on
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe toggle gaps']
+    bindings: ['lwin+shift+backspace']
+  # Calendar and reminders
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe panel clock']
+    bindings: ['lwin+ctrl+alt+r']
+  # Audio panel (outputs, inputs, per-app volume)
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe panel audio']
+    bindings: ['lwin+ctrl+a']
+  # Bluetooth panel
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe panel bluetooth']
+    bindings: ['lwin+ctrl+b']
+  # Network panel
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe panel network']
+    bindings: ['lwin+ctrl+n']
 
   # ── Windows ───────────────────────────────────────────────────────────
   # Close window

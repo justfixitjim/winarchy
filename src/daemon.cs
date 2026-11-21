@@ -13,9 +13,16 @@
 //   winarchy-daemon --stop             stop the running daemon and restore the taskbar
 //   winarchy-daemon --taskbar          toggle the taskbar (also: winarchy taskbar)
 //   winarchy-daemon --restore-taskbar  show the taskbar and restore auto-hide (no daemon needed)
+//   winarchy-daemon --awake            toggle "stay awake" (no sleep, no screen off)
+//   winarchy-daemon --nightlight       toggle night light (a warm 4000 K colour filter)
+//
+//  * Reminders  - pops up reminders.json entries (written by `winarchy remind`) when they're due.
+//  * Drop-down terminal - Super+` shows / hides Windows Terminal's quake window (opened with
+//                 the title "winarchy-dropdown", which GlazeWM's window rules ignore).
 //
 // Options live in settings.json next to the exe:
-//   { "hideTaskbar": true, "blockStartMenu": true, "autotile": true }
+//   { "hideTaskbar": true, "blockStartMenu": true, "autotile": true, "quakeTerminal": true,
+//     "stayAwake": false, "nightLight": false }
 //
 // Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
 
@@ -29,6 +36,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using System.Drawing;
 
 static class Daemon
 {
@@ -46,6 +54,8 @@ static class Daemon
         string arg = args.Length > 0 ? args[0].ToLowerInvariant() : "";
         if (arg == "--stop") { Signal(@"Local\winarchy-daemon-stop"); return; }
         if (arg == "--taskbar") { Signal(@"Local\winarchy-daemon-taskbar"); return; }
+        if (arg == "--awake") { Signal(@"Local\winarchy-daemon-awake"); return; }
+        if (arg == "--nightlight") { Signal(@"Local\winarchy-daemon-nightlight"); return; }
         if (arg == "--restore-taskbar") { Taskbar.Restore(OriginalAutoHidePath); return; }
 
         bool created;
@@ -58,7 +68,33 @@ static class Daemon
             ui.CreateControl();
             IntPtr force = ui.Handle;
 
-            if (Flag("blockStartMenu", true)) SuperKey.Install(ui);
+            SuperKey.BlockStart = Flag("blockStartMenu", true);
+            SuperKey.Quake = Flag("quakeTerminal", true);
+            if (SuperKey.BlockStart || SuperKey.Quake) SuperKey.Install(ui);
+
+            // Toggles (Omarchy's Super+Ctrl+I "stay awake" and its night light), kept in settings.json
+            // so the bar can show them and they survive a restart.
+            Awake.Set(Flag("stayAwake", false));
+            NightLight.Set(Flag("nightLight", false));
+            var nightTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+            nightTimer.Tick += delegate { NightLight.Reapply(); }; // displays reset their colours on sleep / reconnect
+            nightTimer.Start();
+            OnEvent(@"Local\winarchy-daemon-awake", delegate
+            {
+                bool on = !Flag("stayAwake", false);
+                settings["stayAwake"] = on;
+                SaveSettings();
+                Awake.Set(on);
+            });
+            OnEvent(@"Local\winarchy-daemon-nightlight", delegate
+            {
+                bool on = !Flag("nightLight", false);
+                settings["nightLight"] = on;
+                SaveSettings();
+                NightLight.Set(on);
+            });
+
+            Reminders.Start(Dir);
 
             var taskbarTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             taskbarTimer.Tick += delegate { if (Flag("hideTaskbar", true)) Taskbar.Hide(OriginalAutoHidePath); };
@@ -69,6 +105,8 @@ static class Daemon
             {
                 Taskbar.Restore(OriginalAutoHidePath);
                 SuperKey.Remove();
+                NightLight.Set(false);
+                Awake.Set(false);
                 Application.ExitThread();
             });
             OnEvent(@"Local\winarchy-daemon-taskbar", delegate
@@ -186,27 +224,106 @@ static class SuperKey
         hook = IntPtr.Zero;
     }
 
+    public static bool BlockStart = true, Quake = true;
+    const int VK_OEM_3 = 0xC0; // ` (grave) on US keyboards
+
     static IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
     {
         if (code >= 0)
         {
             int vk = Marshal.ReadInt32(lParam); // KBDLLHOOKSTRUCT.vkCode
+            int msg = wParam.ToInt32();
+            bool down = msg == 0x100 || msg == 0x104; // WM_KEYDOWN, WM_SYSKEYDOWN
             if (vk == VK_LWIN || vk == VK_RWIN)
             {
-                int msg = wParam.ToInt32();
-                bool down = msg == 0x100 || msg == 0x104; // WM_KEYDOWN, WM_SYSKEYDOWN
                 if (down && !superDown)
                 {
                     superDown = true;
                     // Inject after this callback returns, so Windows sees Super down
                     // first and the mask key second. Injecting from inside the
                     // callback lands too early and does nothing.
-                    if (Target != null) Target.BeginInvoke((MethodInvoker)SendMask);
+                    if (BlockStart && Target != null) Target.BeginInvoke((MethodInvoker)SendMask);
                 }
                 else if (!down) superDown = false;
             }
+            // Super+`: the drop-down terminal (Omarchy's Quake console). Handled here rather than by
+            // Windows Terminal's own shortcut, so GlazeWM never tiles it (see Dropdown).
+            else if (vk == VK_OEM_3 && superDown && Quake)
+            {
+                if (down && !graveDown && Target != null) Target.BeginInvoke((MethodInvoker)Dropdown.Toggle);
+                graveDown = down;
+                return new IntPtr(1);
+            }
+            if (vk == VK_OEM_3 && !down) graveDown = false;
         }
         return CallNextHookEx(hook, code, wParam, lParam);
+    }
+
+    static bool graveDown; // ignore key repeat
+}
+
+// Drop-down terminal: Windows Terminal's quake window, opened with a fixed tab title that
+// GlazeWM's window rules ignore (so it drops down from the top instead of tiling). Super+`
+// shows it, hides it when it's in front, or brings it forward when it's behind.
+static class Dropdown
+{
+    public const string Title = "winarchy-dropdown";
+
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    static IntPtr hwnd;
+
+    static IntPtr Find()
+    {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((h, l) =>
+        {
+            var cls = new StringBuilder(64);
+            GetClassName(h, cls, 64);
+            if (cls.ToString() != "CASCADIA_HOSTING_WINDOW_CLASS") return true;
+            var title = new StringBuilder(256);
+            GetWindowText(h, title, 256);
+            if (title.ToString() == Title) { found = h; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    public static void Toggle()
+    {
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) hwnd = Find();
+        if (hwnd == IntPtr.Zero)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("wt.exe",
+                    "-w _quake nt --title " + Title + " --suppressApplicationTitle") { UseShellExecute = true });
+            }
+            catch { }
+            return;
+        }
+        if (IsWindowVisible(hwnd) && GetForegroundWindow() == hwnd)
+        {
+            ShowWindow(hwnd, 0); // SW_HIDE
+            return;
+        }
+        // Terminal hides the quake window itself when it loses focus, minimised; restore it then.
+        ShowWindow(hwnd, IsIconic(hwnd) ? 9 : 5);  // SW_RESTORE : SW_SHOW
+        // Windows only lets the program with the latest input take the foreground; a tap of Alt
+        // counts (the same trick AutoHotkey uses).
+        keybd_event(0x12, 0, 0, UIntPtr.Zero);
+        keybd_event(0x12, 0, 2, UIntPtr.Zero);
+        SetForegroundWindow(hwnd);
     }
 }
 
@@ -362,5 +479,204 @@ static class Autotile
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         return ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+}
+
+// Stay awake: no sleep and no screen-off while on (like Omarchy's Super+Ctrl+I).
+static class Awake
+{
+    [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint flags);
+    const uint ES_CONTINUOUS = 0x80000000, ES_SYSTEM_REQUIRED = 0x1, ES_DISPLAY_REQUIRED = 0x2;
+
+    // Must be called on the UI thread: the request lasts as long as that thread does.
+    public static void Set(bool on)
+    {
+        SetThreadExecutionState(on ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED : ES_CONTINUOUS);
+    }
+}
+
+// Night light: a warm colour filter, like Omarchy's hyprsunset toggle (4000 K). Windows' own
+// night light can't be switched from code on current builds, so this sets each display's gamma
+// ramp instead (what f.lux does). Displays drop the ramp on sleep or reconnect, so the daemon
+// puts it back every few seconds while it's on.
+static class NightLight
+{
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateDC(string driver, string device, string output, IntPtr init);
+    [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+    [DllImport("gdi32.dll")] static extern bool SetDeviceGammaRamp(IntPtr dc, ushort[] ramp);
+    [DllImport("gdi32.dll")] static extern bool GetDeviceGammaRamp(IntPtr dc, ushort[] ramp);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+        public int StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+    }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplayDevices(string device, int index, ref DISPLAY_DEVICE dd, int flags);
+
+    static bool on;
+    // 4000 K as RGB multipliers. Some systems refuse ramps that far from neutral, so milder
+    // ones follow as fallbacks.
+    static readonly double[][] Warm = { new[] { 1.0, 0.808, 0.651 }, new[] { 1.0, 0.859, 0.729 }, new[] { 1.0, 0.9, 0.8 } };
+
+    static ushort[] Ramp(double r, double g, double b)
+    {
+        var ramp = new ushort[768];
+        for (int i = 0; i < 256; i++)
+        {
+            ramp[i] = (ushort)Math.Min(65535, i * 257 * r);
+            ramp[256 + i] = (ushort)Math.Min(65535, i * 257 * g);
+            ramp[512 + i] = (ushort)Math.Min(65535, i * 257 * b);
+        }
+        return ramp;
+    }
+
+    static List<string> Displays()
+    {
+        var list = new List<string>();
+        var dd = new DISPLAY_DEVICE { cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE)) };
+        for (int i = 0; EnumDisplayDevices(null, i, ref dd, 0); i++)
+        {
+            if ((dd.StateFlags & 1) != 0) list.Add(dd.DeviceName); // attached to the desktop
+            dd.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE));
+        }
+        return list;
+    }
+
+    // Returns how many displays have the wanted ramp.
+    public static int Apply(bool warm)
+    {
+        int done = 0;
+        foreach (string name in Displays())
+        {
+            IntPtr dc = CreateDC(null, name, null, IntPtr.Zero);
+            if (dc == IntPtr.Zero) continue;
+            try
+            {
+                if (!warm) { if (SetDeviceGammaRamp(dc, Ramp(1, 1, 1))) done++; continue; }
+                var have = new ushort[768];
+                bool got = GetDeviceGammaRamp(dc, have);
+                foreach (var m in Warm)
+                {
+                    var want = Ramp(m[0], m[1], m[2]);
+                    if (got && have[767] == want[767] && have[511] == want[511]) { done++; break; } // already set
+                    if (SetDeviceGammaRamp(dc, want)) { done++; break; }
+                }
+            }
+            finally { DeleteDC(dc); }
+        }
+        return done;
+    }
+
+    public static void Set(bool value)
+    {
+        bool was = on;
+        on = value;
+        if (on) Apply(true);
+        else if (was) Apply(false);
+    }
+
+    public static void Reapply() { if (on) Apply(true); }
+}
+
+// Reminders (Omarchy's Super+Ctrl+R): `winarchy remind` writes reminders.json, the bar's clock
+// panel lists them, and this pops each one up in the theme's colours when it's due.
+static class Reminders
+{
+    static string path, themePath;
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+    static int shown;
+
+    public static void Start(string dir)
+    {
+        path = Path.Combine(dir, "reminders.json");
+        themePath = Path.Combine(dir, "theme.json");
+        var timer = new System.Windows.Forms.Timer { Interval = 1000 };
+        timer.Tick += delegate { Check(); };
+        timer.Start();
+    }
+
+    static void Check()
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            var stamp = File.GetLastWriteTimeUtc(path);
+            var list = Json.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as object[];
+            if (list == null || list.Length == 0) return;
+            long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds;
+            var keep = new List<object>();
+            var due = new List<string>();
+            foreach (var o in list)
+            {
+                var r = o as Dictionary<string, object>;
+                if (r == null) continue;
+                long when = Convert.ToInt64(r.ContainsKey("due") ? r["due"] : 0);
+                if (when <= now) due.Add(r.ContainsKey("text") ? Convert.ToString(r["text"]) : "Reminder");
+                else keep.Add(r);
+            }
+            if (due.Count == 0) return;
+            if (File.GetLastWriteTimeUtc(path) != stamp) return; // changed while reading; next tick
+            File.WriteAllText(path, Json.Serialize(keep), new UTF8Encoding(false));
+            foreach (string text in due) Show(text);
+        }
+        catch { }
+    }
+
+    static Color ThemeColor(Dictionary<string, object> theme, string name, string fallback)
+    {
+        object v;
+        try { if (theme != null && theme.TryGetValue(name, out v) && v is string) return ColorTranslator.FromHtml((string)v); } catch { }
+        return ColorTranslator.FromHtml(fallback);
+    }
+
+    public static void Show(string text)
+    {
+        Dictionary<string, object> theme = null;
+        try
+        {
+            var all = Json.DeserializeObject(File.ReadAllText(themePath, Encoding.UTF8)) as Dictionary<string, object>;
+            if (all != null) theme = (all.ContainsKey("colors") ? all["colors"] : all) as Dictionary<string, object>;
+        }
+        catch { }
+        Color bg = ThemeColor(theme, "background", "#1a1b26"), fg = ThemeColor(theme, "foreground", "#c0caf5");
+        Color accent = ThemeColor(theme, "accent", "#7aa2f7"), muted = ThemeColor(theme, "muted", "#565f89");
+
+        var area = Screen.PrimaryScreen.WorkingArea;
+        float scale;
+        using (var g = Graphics.FromHwnd(IntPtr.Zero)) scale = g.DpiX / 96f;
+        int w = (int)(340 * scale), h = (int)(86 * scale), pad = (int)(14 * scale);
+        var form = new Form
+        {
+            FormBorderStyle = FormBorderStyle.None,
+            ShowInTaskbar = false,
+            TopMost = true,
+            StartPosition = FormStartPosition.Manual,
+            BackColor = accent,
+            Padding = new Padding(1),
+            Size = new Size(w, h),
+            Location = new Point(area.Right - w - (int)(12 * scale), area.Top + (int)(12 * scale) + shown * (h + (int)(8 * scale))),
+            Text = "winarchy reminder",
+        };
+        var inner = new Panel { Dock = DockStyle.Fill, BackColor = bg, Padding = new Padding(pad, (int)(10 * scale), pad, (int)(8 * scale)) };
+        var font = new Font("JetBrainsMono NFM", 10f);
+        if (font.Name != "JetBrainsMono NFM") font = new Font("Consolas", 10f);
+        var title = new Label { Dock = DockStyle.Top, AutoSize = false, Height = (int)(20 * scale), ForeColor = accent, Font = font, Text = "Reminder  " + DateTime.Now.ToString("t") };
+        var body = new Label { Dock = DockStyle.Fill, ForeColor = fg, Font = font, Text = text, AutoEllipsis = true };
+        var hint = new Label { Dock = DockStyle.Bottom, AutoSize = false, Height = (int)(16 * scale), ForeColor = muted, Font = new Font(font.FontFamily, 8f), Text = "click to dismiss" };
+        inner.Controls.Add(body);
+        inner.Controls.Add(title);
+        inner.Controls.Add(hint);
+        form.Controls.Add(inner);
+        EventHandler close = delegate { form.Close(); };
+        foreach (Control c in new Control[] { form, inner, title, body, hint }) c.Click += close;
+        form.FormClosed += delegate { if (shown > 0) shown--; };
+        shown++;
+        form.Show();
+        System.Media.SystemSounds.Exclamation.Play();
     }
 }

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy Bluetooth panel: opened from the bar's Bluetooth icon or Super+Ctrl+B. The radio
+         switch and paired devices with their battery (like Omarchy's Bluetooth panel).
+         Colours come from theme.css. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import { React, createRoot, htm, zebar } from './vendor/ui.mjs';
+      const { useState, useEffect } = React;
+      const html = htm.bind(React.createElement);
+
+      // winarchy's Bluetooth script. install.ps1 fills in the path.
+      const BLUETOOTH = '{{BLUETOOTH_PS1}}';
+      const PS = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', BLUETOOTH];
+      const CACHE = BLUETOOTH.replace(/tools\\bluetooth\.ps1$/i, 'bluetooth.json');
+
+      const close = () => zebar.currentWidget().close();
+      window.addEventListener('blur', close);
+      window.addEventListener('keydown', e => e.key === 'Escape' && close());
+
+      const ps = args => zebar.shellExec('powershell.exe', [...PS, ...args]).then(o => JSON.parse(o.stdout.trim() || '{}'));
+      const settings = () => { zebar.shellSpawn('explorer.exe', ['ms-settings:bluetooth']).catch(console.error); close(); };
+
+      const KIND_ICONS = {
+        mouse: 'nf-md-mouse', keyboard: 'nf-md-keyboard', headset: 'nf-md-headphones', speaker: 'nf-md-speaker',
+        gamepad: 'nf-md-controller', phone: 'nf-md-cellphone', computer: 'nf-md-laptop', watch: 'nf-md-watch',
+        other: 'nf-md-bluetooth',
+      };
+      const batteryIcon = p => p >= 90 ? 'nf-md-battery' : p >= 70 ? 'nf-md-battery_80' : p >= 50 ? 'nf-md-battery_60'
+        : p >= 30 ? 'nf-md-battery_40' : p >= 15 ? 'nf-md-battery_20' : 'nf-md-battery_alert';
+
+      function App() {
+        const [info, setInfo] = useState(null);
+        const [pending, setPending] = useState(null);   // where the radio switch is going
+        const [msg, setMsg] = useState('');
+
+        const refresh = () => ps(['info']).then(setInfo).catch(console.error);
+        useEffect(() => {
+          zebar.shellExec('cmd.exe', ['/c', 'type', CACHE])
+            .then(o => { if (o.stdout.trim()) setInfo(JSON.parse(o.stdout.trim())); })
+            .catch(() => {})
+            .finally(refresh);
+          const t = setInterval(refresh, 15000);
+          return () => clearInterval(t);
+        }, []);
+
+        async function toggle() {
+          const turnOn = info.radio !== 'on';
+          setPending(turnOn);
+          try {
+            const r = await ps(['radio', turnOn ? 'on' : 'off']);
+            if (r.info) setInfo(r.info);
+            if (r.ok === false) { setMsg(`Windows refused (${r.status || 'error'}).`); setTimeout(() => setMsg(''), 3000); }
+          } catch (err) { console.error(err); setMsg('That did not work.'); }
+          setPending(null);
+        }
+
+        const devices = info?.devices || [];
+        const on = pending ?? (info?.radio === 'on');
+        return html`
+          <div class="panel">
+            <div class="panel-head">
+              <span class="title">Bluetooth</span>
+              <span class="card-head">
+                <span class="state">${pending != null ? (pending ? 'Turning on...' : 'Turning off...') : info ? (info.radio === 'on' ? 'On' : info.radio === 'none' ? 'No adapter' : 'Off') : ''}</span>
+                ${info && info.radio !== 'none' && html`
+                  <button class=${`toggle ${on ? 'on' : ''}`} disabled=${pending != null} title=${`Turn Bluetooth ${on ? 'off' : 'on'}`} onClick=${toggle}>
+                    <span class="knob"></span>
+                  </button>`}
+              </span>
+            </div>
+            ${!info && html`<div class="note">Loading...</div>`}
+            ${info && html`
+              <section>
+                <div class="provider"><span>Devices</span>
+                  <button class="link" onClick=${refresh} title="Refresh"><i class="nf nf-md-refresh"></i></button>
+                </div>
+                ${!devices.length && html`<div class="wx-dim">No paired devices.</div>`}
+                ${devices.map(d => html`
+                  <div key=${d.name} class=${`card bt ${d.connected && info.radio === 'on' ? 'active' : ''}`}>
+                    <div class="card-head">
+                      <i class=${`nf ${KIND_ICONS[d.kind] || KIND_ICONS.other} kind`}></i>
+                      <span class="label">${d.name}</span>
+                      ${d.battery != null && html`
+                        <span class=${`battery ${d.battery < 20 ? 'low' : ''}`} title="Battery">
+                          <i class=${`nf ${batteryIcon(d.battery)}`}></i>${d.battery}%
+                        </span>`}
+                      <span class="state">${d.connected && info.radio === 'on' ? 'Connected' : 'Not connected'}</span>
+                    </div>
+                  </div>`)}
+              </section>`}
+            <div class="actions">
+              <button class="add" onClick=${settings}><i class="nf nf-md-plus"></i> Add a device</button>
+              <button class="add" onClick=${settings}><i class="nf nf-md-cog_outline"></i> Bluetooth settings</button>
+            </div>
+            <div class="wx-credit">Connect or remove devices in Bluetooth settings.</div>
+            ${msg && html`<div class="busy">${msg}</div>`}
+          </div>`;
+      }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
+    </script>
+  </body>
+</html>

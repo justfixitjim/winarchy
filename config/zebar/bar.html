@@ -38,9 +38,33 @@
       // winarchy's process helper (video memory for the bar, everything for the process panel).
       const TOP = '{{TOP_EXE}}';
 
+      // winarchy's Bluetooth script (radio and paired devices). install.ps1 fills in the path.
+      const BLUETOOTH = '{{BLUETOOTH_PS1}}';
+
       // Runs an allowed program without waiting for it to exit.
       function run(program, args) {
         zebar.shellSpawn(program, args).catch(err => console.error(err));
+      }
+
+      const panel = name => zebar.startWidgetPreset(name, 'panel').catch(console.error);
+
+      // One stream from winarchy-top.exe every 5 seconds: video memory for Stats, and the toggles
+      // (stay awake, night light, do not disturb, reminders) for Indicators.
+      function useSummary() {
+        const [summary, setSummary] = useState(null);
+        useEffect(() => {
+          let proc = null, stopped = false, retry = null;
+          async function start() {
+            try {
+              proc = await zebar.shellSpawn(TOP, ['summary', '5000']);
+              proc.onStdout(line => { try { setSummary(JSON.parse(line)); } catch {} });
+              proc.onExit(() => { if (!stopped) retry = setTimeout(start, 15000); });
+            } catch (err) { console.error(err); }
+          }
+          start();
+          return () => { stopped = true; clearTimeout(retry); try { proc?.kill(); } catch {} };
+        }, []);
+        return [summary, setSummary];
       }
 
       const providers = zebar.createProviderGroup({
@@ -53,6 +77,7 @@
         weather: { type: 'weather' },
         audio: { type: 'audio' },
         systray: { type: 'systray' },
+        media: { type: 'media' },
       });
 
       // System tray: the taskbar is hidden, so tray-only apps show here instead.
@@ -132,21 +157,8 @@
       }
 
       // CPU, RAM and video memory together; click for the process panel (a slim task manager).
-      // VRAM isn't a Zebar provider, so winarchy-top.exe streams it every 5 seconds.
-      function Stats({ cpu, memory }) {
-        const [vram, setVram] = useState(null);
-        useEffect(() => {
-          let proc = null, stopped = false, retry = null;
-          async function start() {
-            try {
-              proc = await zebar.shellSpawn(TOP, ['summary', '5000']);
-              proc.onStdout(line => { try { setVram(JSON.parse(line)); } catch {} });
-              proc.onExit(() => { if (!stopped) retry = setTimeout(start, 15000); });
-            } catch (err) { console.error(err); }
-          }
-          start();
-          return () => { stopped = true; clearTimeout(retry); try { proc?.kill(); } catch {} };
-        }, []);
+      // VRAM isn't a Zebar provider, so it comes from winarchy-top.exe (useSummary).
+      function Stats({ cpu, memory, vram }) {
         const level = p => (p >= 85 ? 'high' : p >= 60 ? 'mid' : '');
         const vp = vram && vram.vramTotal > 0 ? (vram.vramUsed / vram.vramTotal) * 100 : null;
         const gb = b => (b / 1073741824).toFixed(1);
@@ -157,15 +169,100 @@
           'Click for processes',
         ].filter(Boolean).join('\n');
         return html`
-          <button className="stats" title=${tip} onClick=${() => zebar.startWidgetPreset('processes', 'panel').catch(console.error)}>
+          <button className="stats" title=${tip} onClick=${() => panel('processes')}>
             ${cpu && html`<span className="stat"><i className="nf nf-oct-cpu"></i><span className=${level(cpu.usage)}>${Math.round(cpu.usage)}%</span></span>`}
             ${memory && html`<span className="stat"><i className="nf nf-fae-chip"></i><span className=${level(memory.usage)}>${Math.round(memory.usage)}%</span></span>`}
             ${vp != null && html`<span className="stat"><i className="nf nf-md-expansion_card vram-icon"></i><span className=${level(vp)}>${Math.round(vp)}%</span></span>`}
           </button>`;
       }
 
-      // Volume: scroll to change, click the icon to mute, drag the slider (shown on
-      // hover), right-click for Windows sound settings.
+      // Toggles that are on (stay awake, do not disturb, night light, reminders), like Omarchy's
+      // indicators. Hover to see the ones that are off too; click one to switch it.
+      function Indicators({ summary, setSummary }) {
+        const [, setTick] = useState(0);
+        useEffect(() => { const t = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(t); }, []);
+        if (!summary) return null;
+        const flip = (key, toggle) => {
+          setSummary(s => ({ ...s, [key]: !s[key] }));   // at once; the next update confirms it
+          run(WINARCHY, ['toggle', toggle]);
+        };
+        const reminders = summary.reminders || [];
+        const left = due => {
+          const m = Math.max(0, Math.round((due - Date.now()) / 60000));
+          return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+        };
+        const items = [
+          { key: 'awake', toggle: 'awake', icon: 'nf-md-coffee', on: summary.awake, tip: 'Stay awake (Super+Ctrl+I): no sleep or screen-off' },
+          { key: 'dnd', toggle: 'dnd', icon: 'nf-md-bell_off', on: summary.dnd, tip: 'Do not disturb (Super+Ctrl+Alt+,)', hide: summary.dnd == null },
+          { key: 'nightLight', toggle: 'nightlight', icon: 'nf-md-weather_night', on: summary.nightLight, tip: 'Night light: warm colours' },
+        ].filter(i => !i.hide);
+        const any = items.some(i => i.on) || reminders.length > 0;
+        return html`
+          <div className=${`indicators ${any ? '' : 'idle'}`}>
+            ${reminders.length > 0 && html`
+              <button className="indicator on" title=${reminders.map(r => `${left(r.due)}  ${r.text}`).join('\n') + '\nClick for reminders (Super+Ctrl+Alt+R)'} onClick=${() => panel('clock')}>
+                <i className="nf nf-md-alarm"></i>${left(reminders[0].due)}
+              </button>`}
+            ${items.map(i => html`
+              <button key=${i.key} className=${`indicator ${i.on ? 'on' : 'off'}`} title=${`${i.tip}\nClick to turn ${i.on ? 'off' : 'on'}`} onClick=${() => flip(i.key, i.toggle)}>
+                <i className=${`nf ${i.icon}`}></i>
+              </button>`)}
+            ${!any && html`<span className="indicator peek nf nf-md-circle_small"></span>`}
+          </div>`;
+      }
+
+      // Now playing (any app that shows in Windows' media controls): click to play / pause,
+      // middle-click for the next track, scroll for next / previous.
+      function Media({ media }) {
+        const s = media.currentSession;
+        if (!s || !(s.title || s.artist)) return null;
+        const label = [s.title, s.artist].filter(Boolean).join(' - ');
+        return html`
+          <button
+            className=${`media ${s.isPlaying ? 'playing' : ''}`}
+            title=${`${label}${s.albumTitle ? `\n${s.albumTitle}` : ''}\nClick: play / pause   Middle-click: next   Scroll: next / previous`}
+            onClick=${() => media.togglePlayPause()}
+            onAuxClick=${e => e.button === 1 && media.next()}
+            onWheel=${e => (e.deltaY > 0 ? media.next() : media.previous())}
+          >
+            <i className=${`nf ${s.isPlaying ? 'nf-md-pause' : 'nf-md-play'}`}></i>
+            <span className="media-text">${label}</span>
+          </button>`;
+      }
+
+      // Bluetooth: hidden when the PC has no Bluetooth; click for the Bluetooth panel.
+      function Bluetooth() {
+        const [info, setInfo] = useState(null);
+        const cache = BLUETOOTH.replace(/tools\\bluetooth\.ps1$/i, 'bluetooth.json');
+        async function refresh(run) {
+          try {
+            const text = run
+              ? (await zebar.shellExec('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', BLUETOOTH, 'info'])).stdout.trim()
+              : (await zebar.shellExec('cmd.exe', ['/c', 'type', cache]).catch(() => ({ stdout: '' }))).stdout.trim();
+            if (text) setInfo(JSON.parse(text));
+          } catch (err) { console.error(err); }
+        }
+        useEffect(() => {
+          refresh(false).then(() => refresh(true));
+          const quick = setInterval(() => refresh(false), 20000);  // the panel keeps the file fresh while used
+          const full = setInterval(() => refresh(true), 180000);
+          return () => { clearInterval(quick); clearInterval(full); };
+        }, []);
+        if (!info || info.radio === 'none') return null;
+        const connected = (info.devices || []).filter(d => d.connected);
+        const on = info.radio === 'on';
+        const icon = !on ? 'nf-md-bluetooth_off' : connected.length ? 'nf-md-bluetooth_connect' : 'nf-md-bluetooth';
+        const tip = !on ? 'Bluetooth off' : connected.length
+          ? connected.map(d => `${d.name}${d.battery != null ? `  ${d.battery}%` : ''}`).join('\n')
+          : 'Bluetooth on, nothing connected';
+        return html`
+          <button className=${`bluetooth ${on ? '' : 'off'}`} title=${`${tip}\nClick for Bluetooth (Super+Ctrl+B)`} onClick=${() => panel('bluetooth')}>
+            <i className=${`nf ${icon}`}></i>${connected.length > 1 ? html`<span> ${connected.length}</span>` : null}
+          </button>`;
+      }
+
+      // Volume: click for the audio panel (outputs, inputs, per-app volume), right-click to mute,
+      // scroll to change, or drag the slider shown on hover.
       function Volume({ audio }) {
         const device = audio.defaultPlaybackDevice;
         const volume = device.volume;
@@ -179,15 +276,15 @@
         return html`
           <div
             className=${`volume ${device.isMuted ? 'muted' : ''}`}
-            title=${device.name}
+            title=${`${device.name}\nClick: audio panel (Super+Ctrl+A)   Right-click: mute   Scroll: volume`}
             onWheel=${e => set(volume + (e.deltaY < 0 ? 2 : -2))}
-            onContextMenu=${e => { e.preventDefault(); run('explorer.exe', 'ms-settings:sound'); }}
+            onContextMenu=${e => { e.preventDefault(); audio.setMute(!device.isMuted); }}
           >
             <input
               type="range" min="0" max="100" value=${volume}
               onChange=${e => set(Number(e.target.value))}
             />
-            <button className=${`nf ${icon}`} onClick=${() => audio.setMute(!device.isMuted)}></button>
+            <button className=${`nf ${icon}`} onClick=${() => panel('audio')}></button>
             <span>${volume}%</span>
           </div>`;
       }
@@ -351,6 +448,7 @@
 
       function App() {
         const [output, setOutput] = useState(providers.outputMap);
+        const [summary, setSummary] = useSummary();
 
         useEffect(() => {
           providers.onOutput(() => setOutput(providers.outputMap));
@@ -379,7 +477,13 @@
                 </div>`}
             </div>
 
-            <div className="center">${output.date?.formatted}</div>
+            <div className="center">
+              <button className="clock" title="Click for the calendar and reminders (Super+Ctrl+Alt+R)" onClick=${() => panel('clock')}>
+                ${output.date?.formatted}
+              </button>
+              <${Indicators} summary=${summary} setSummary=${setSummary} />
+              ${output.media && html`<${Media} media=${output.media} />`}
+            </div>
 
             <div className="right">
               ${wm && html`
@@ -408,6 +512,8 @@
 
               ${output.audio?.defaultPlaybackDevice && html`<${Volume} audio=${output.audio} />`}
 
+              <${Bluetooth} />
+
               ${output.network && html`
                 <button
                   className="network"
@@ -418,7 +524,7 @@
                   ${output.network.defaultGateway?.ssid}
                 </button>`}
 
-              ${(output.cpu || output.memory) && html`<${Stats} cpu=${output.cpu} memory=${output.memory} />`}
+              ${(output.cpu || output.memory) && html`<${Stats} cpu=${output.cpu} memory=${output.memory} vram=${summary} />`}
 
               ${output.battery && html`
                 <div className="battery">

@@ -11,6 +11,14 @@
 //   winarchy launch app <Name> [id]  start an app by its Start-menu name; offers a
 //                                    winget install (package id) if it is missing
 //   winarchy taskbar                 show/hide the Windows taskbar (via winarchy-daemon)
+//   winarchy toggle awake            stay awake: no sleep or screen-off (via winarchy-daemon)
+//   winarchy toggle nightlight       warm colour filter (via winarchy-daemon)
+//   winarchy toggle dnd              Windows' do not disturb
+//   winarchy toggle bar              hide / show the top bar (Zebar)
+//   winarchy toggle gaps             no gaps between windows / gaps back
+//   winarchy remind add <min> <text> pop up <text> in <min> minutes (winarchy-daemon shows it)
+//   winarchy remind remove <id>      cancel one reminder; `remind clear` cancels all
+//   winarchy panel <name>            open a bar panel: clock, audio, bluetooth, network, ...
 //
 // Running a menu mode while a menu is open closes it, so hotkeys toggle.
 // Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
@@ -478,6 +486,9 @@ static class Program
             else MessageBox.Show("winarchy-daemon is not running, so the taskbar is not being managed.", "winarchy");
             return;
         }
+        if (first == "toggle") { Toggles.Run(args.Length > 1 ? args[1].ToLowerInvariant() : "", Dir); return; }
+        if (first == "remind") { Toggles.Remind(args, Dir); return; }
+        if (first == "panel") { Toggles.Panel(args.Length > 1 ? args[1].ToLowerInvariant() : ""); return; }
         if (first == "launch")
         {
             Prepared = Launcher.Run(args);

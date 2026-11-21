@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy clock panel: opened from the bar's clock or Super+Ctrl+Alt+R. A month calendar with
+         ISO week numbers, and reminders (like Omarchy's Super+Ctrl+R). Colours come from theme.css. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import { React, createRoot, htm, zebar } from './vendor/ui.mjs';
+      const { useState, useEffect, useRef } = React;
+      const html = htm.bind(React.createElement);
+
+      // winarchy's menu app; `winarchy remind ...` adds and removes reminders, and winarchy-daemon
+      // pops them up. install.ps1 fills in the path.
+      const WINARCHY = '{{WINARCHY_EXE}}';
+      const FILE = WINARCHY.replace(/winarchy\.exe$/i, 'reminders.json').replace(/\//g, '\\');
+
+      const close = () => zebar.currentWidget().close();
+      window.addEventListener('blur', close);
+      window.addEventListener('keydown', e => e.key === 'Escape' && close());
+
+      // ISO 8601 week number (weeks start on Monday; week 1 holds the first Thursday).
+      function isoWeek(d) {
+        const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        const day = t.getUTCDay() || 7;
+        t.setUTCDate(t.getUTCDate() + 4 - day);
+        const start = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+        return Math.ceil(((t - start) / 86400000 + 1) / 7);
+      }
+
+      function Calendar() {
+        const today = new Date();
+        const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+        const first = new Date(month);
+        const offset = (first.getDay() + 6) % 7;                 // Monday first
+        const start = new Date(first); start.setDate(1 - offset);
+        const weeks = [];
+        for (let w = 0; w < 6; w++) {
+          const days = [];
+          for (let i = 0; i < 7; i++) { const d = new Date(start); d.setDate(start.getDate() + w * 7 + i); days.push(d); }
+          if (w === 5 && days[0].getMonth() !== month.getMonth()) break;
+          weeks.push(days);
+        }
+        const same = (a, b) => a.toDateString() === b.toDateString();
+        const shift = n => setMonth(m => new Date(m.getFullYear(), m.getMonth() + n, 1));
+        return html`
+          <div onWheel=${e => shift(e.deltaY > 0 ? 1 : -1)}>
+            <div class="cal-head">
+              <button class="link" onClick=${() => shift(-1)} title="Previous month"><i class="nf nf-md-chevron_left"></i></button>
+              <button class="cal-title" onClick=${() => setMonth(new Date(today.getFullYear(), today.getMonth(), 1))} title="Back to this month">
+                ${month.toLocaleDateString([], { month: 'long', year: 'numeric' })}
+              </button>
+              <button class="link" onClick=${() => shift(1)} title="Next month"><i class="nf nf-md-chevron_right"></i></button>
+            </div>
+            <div class="cal">
+              <span class="wk">wk</span>
+              ${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => html`<span class="dow">${d}</span>`)}
+              ${weeks.map(days => html`
+                <span class="wk">${isoWeek(days[0])}</span>
+                ${days.map(d => html`<span class=${`day ${d.getMonth() !== month.getMonth() ? 'other' : ''} ${same(d, today) ? 'today' : ''} ${d.getDay() % 6 === 0 ? 'weekend' : ''}`}>${d.getDate()}</span>`)}`)}
+            </div>
+          </div>`;
+      }
+
+      function Reminders() {
+        const [list, setList] = useState(null);
+        const [minutes, setMinutes] = useState('10');
+        const [text, setText] = useState('');
+        const [, setTick] = useState(0);
+        const textRef = useRef(null);
+
+        const load = () => zebar.shellExec('cmd.exe', ['/c', 'type', FILE])
+          .then(o => setList(JSON.parse(o.stdout.trim() || '[]')))
+          .catch(() => setList([]));
+        useEffect(() => {
+          load();
+          textRef.current?.focus();
+          const t = setInterval(() => { setTick(n => n + 1); load(); }, 5000);
+          return () => clearInterval(t);
+        }, []);
+
+        async function remind(args) {
+          try { await zebar.shellExec(WINARCHY, args); } catch (err) { console.error(err); }
+          load();
+        }
+        function add(e) {
+          e?.preventDefault();
+          const m = parseFloat(minutes);
+          if (!(m > 0)) return;
+          const msg = text.replace(/[\r\n]+/g, ' ').trim().slice(0, 200) || 'Reminder';
+          remind(['remind', 'add', String(Math.round(m)), ...msg.split(' ').filter(Boolean)]);
+          setText('');
+        }
+        const left = due => {
+          const s = Math.max(0, Math.round((due - Date.now()) / 1000));
+          const m = Math.floor(s / 60);
+          return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m >= 1 ? `${m}m` : `${s}s`;
+        };
+        const at = due => new Date(due).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+        return html`
+          <section>
+            <div class="provider"><span>Reminders</span>
+              ${list?.length > 1 && html`<button class="link" title="Cancel all reminders" onClick=${() => remind(['remind', 'clear'])}>clear</button>`}
+            </div>
+            ${list && !list.length && html`<div class="wx-dim">None set.</div>`}
+            ${(list || []).map(r => html`
+              <div class="row reminder" key=${r.id}>
+                <span class="key">${left(r.due)}</span>
+                <span class="value" title=${`at ${at(r.due)}`}>${r.text}</span>
+                <button class="link x" title="Cancel" onClick=${() => remind(['remind', 'remove', String(r.id)])}><i class="nf nf-md-close"></i></button>
+              </div>`)}
+            <form class="remind-form" onSubmit=${add}>
+              <div class="search">
+                <i class="nf nf-md-alarm_plus"></i>
+                <input ref=${textRef} placeholder="Remind me to..." value=${text} onInput=${e => setText(e.target.value)} maxlength="200" />
+              </div>
+              <div class="quick">
+                <span class="wx-dim">in</span>
+                ${['5', '10', '25', '60'].map(m => html`
+                  <button type="button" class=${`switch ${minutes === m ? 'on' : ''}`} onClick=${() => setMinutes(m)}>${m}m</button>`)}
+                <input class="mins" type="number" min="1" max="1440" value=${minutes} onInput=${e => setMinutes(e.target.value)} title="Minutes" />
+                <button type="submit" class="use">Add</button>
+              </div>
+            </form>
+          </section>`;
+      }
+
+      function App() {
+        const [now, setNow] = useState(new Date());
+        useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+        return html`
+          <div class="panel">
+            <div class="panel-head">
+              <span class="title">${now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+              <span class="clock-now">${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+            </div>
+            <${Calendar} />
+            <${Reminders} />
+          </div>`;
+      }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
+    </script>
+  </body>
+</html>

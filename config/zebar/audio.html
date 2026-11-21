@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy audio panel: opened from the bar's volume icon or Super+Ctrl+A. Pick the output and
+         input, set their volume, and set each app's own volume (like Omarchy's audio panel).
+         Colours come from theme.css. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import { React, createRoot, htm, zebar } from './vendor/ui.mjs';
+      const { useState, useEffect, useRef } = React;
+      const html = htm.bind(React.createElement);
+
+      // winarchy's audio helper (default device, per-app volume). install.ps1 fills in the path.
+      const AUDIO = '{{AUDIO_EXE}}';
+
+      const close = () => zebar.currentWidget().close();
+      window.addEventListener('blur', close);
+      window.addEventListener('keydown', e => e.key === 'Escape' && close());
+
+      const live = zebar.createProvider({ type: 'audio' });
+      const helper = args => zebar.shellExec(AUDIO, args).then(o => JSON.parse(o.stdout.trim() || '{}'));
+
+      const volIcon = (v, muted) => muted || v === 0 ? 'nf-md-volume_off' : v < 34 ? 'nf-md-volume_low' : v < 67 ? 'nf-md-volume_medium' : 'nf-md-volume_high';
+
+      function Slider({ value, muted, icon, onChange, onMute, title }) {
+        return html`
+          <div class=${`slider-row ${muted ? 'muted' : ''}`}>
+            <button class="link mute" title=${muted ? 'Unmute' : 'Mute'} onClick=${onMute}><i class=${`nf ${icon}`}></i></button>
+            <input type="range" min="0" max="100" value=${value} title=${title || ''}
+              style=${{ '--fill': `${value}%` }}
+              onInput=${e => onChange(Number(e.target.value))}
+              onWheel=${e => onChange(Math.max(0, Math.min(100, value + (e.deltaY < 0 ? 2 : -2))))} />
+            <span class="num pct">${value}%</span>
+          </div>`;
+      }
+
+      // A list of devices (outputs or inputs): the default one has its volume slider; click another to switch.
+      function Devices({ title, devices, isDefault, audio, input, onSwitch }) {
+        if (!devices.length) return null;
+        const def = devices.find(isDefault);
+        return html`
+          <section>
+            <div class="provider"><span>${title}</span></div>
+            ${def && html`<${Slider}
+              value=${def.volume} muted=${def.isMuted}
+              icon=${input ? (def.isMuted ? 'nf-md-microphone_off' : 'nf-md-microphone') : volIcon(def.volume, def.isMuted)}
+              onChange=${v => audio.setVolume(v, { deviceId: def.deviceId })}
+              onMute=${() => audio.setMute(!def.isMuted, { deviceId: def.deviceId })} />`}
+            <div class="devices">
+              ${devices.map(d => html`
+                <button key=${d.deviceId} class=${`device ${isDefault(d) ? 'on' : ''}`} title=${isDefault(d) ? 'In use' : 'Click to use this one'}
+                  onClick=${() => !isDefault(d) && onSwitch(d)}>
+                  <i class=${`nf ${isDefault(d) ? 'nf-md-radiobox_marked' : 'nf-md-radiobox_blank'}`}></i>
+                  <span class="label">${d.name}</span>
+                </button>`)}
+            </div>
+          </section>`;
+      }
+
+      function App() {
+        const [audio, setAudio] = useState(live.output);
+        const [apps, setApps] = useState(null);
+        const [busy, setBusy] = useState('');
+        const dragging = useRef({});     // app name -> volume being dragged (ignore polls meanwhile)
+
+        const loadApps = () => helper(['apps']).then(r => r.apps && setApps(r.apps)).catch(console.error);
+        useEffect(() => {
+          const stop = live.onOutput(setAudio);
+          loadApps();
+          const t = setInterval(loadApps, 2000);
+          return () => { stop?.(); clearInterval(t); };
+        }, []);
+
+        async function use(d) {
+          setBusy(`Switching to ${d.name}...`);
+          try { const r = await helper(['default', d.deviceId]); if (r.error) setBusy(r.error); else setBusy(''); }
+          catch (err) { setBusy('That did not work.'); }
+          setTimeout(() => setBusy(''), 2500);
+          loadApps();
+        }
+
+        // One row per app name (Discord, browsers and games open several audio sessions).
+        const groups = [];
+        for (const a of apps || []) {
+          let g = groups.find(x => x.name === a.name);
+          if (!g) groups.push(g = { name: a.name, pids: [], volume: a.volume, muted: a.muted, active: false, system: a.system });
+          g.pids.push(a.pid);
+          g.active = g.active || a.active;
+        }
+        groups.sort((a, b) => (a.system - b.system) || (b.active - a.active) || a.name.localeCompare(b.name));
+
+        function setAppVolume(g, v) {
+          dragging.current[g.name] = v;
+          setApps(list => list.map(a => (g.pids.includes(a.pid) ? { ...a, volume: v } : a)));
+          clearTimeout(dragging.current[g.name + ':t']);
+          dragging.current[g.name + ':t'] = setTimeout(() => {
+            helper(['volume', g.pids.join(','), String(v)]).finally(() => { delete dragging.current[g.name]; });
+          }, 60);
+        }
+        function muteApp(g) {
+          setApps(list => list.map(a => (g.pids.includes(a.pid) ? { ...a, muted: !g.muted } : a)));
+          helper(['mute', g.pids.join(','), g.muted ? 'off' : 'on']).then(loadApps);
+        }
+
+        const out = audio?.playbackDevices || [];
+        const inp = audio?.recordingDevices || [];
+        return html`
+          <div class="panel">
+            <div class="panel-head">
+              <span class="title">Audio</span>
+            </div>
+            ${!audio && html`<div class="note">Loading...</div>`}
+            <${Devices} title="Output" devices=${out} isDefault=${d => d.isDefaultPlayback} audio=${audio} onSwitch=${use} />
+            <${Devices} title="Input" devices=${inp} isDefault=${d => d.isDefaultRecording} audio=${audio} input=${true} onSwitch=${use} />
+            <section>
+              <div class="provider"><span>Apps</span></div>
+              ${apps && !groups.length && html`<div class="wx-dim">Nothing is playing sound.</div>`}
+              ${groups.map(g => html`
+                <div key=${g.name} class=${`app ${g.active ? 'active' : ''}`}>
+                  <div class="app-name"><span class="label">${g.name}</span>${g.active && html`<i class="nf nf-md-waveform playing"></i>`}</div>
+                  <${Slider} value=${dragging.current[g.name] ?? g.volume} muted=${g.muted} icon=${volIcon(g.volume, g.muted)}
+                    onChange=${v => setAppVolume(g, v)} onMute=${() => muteApp(g)} />
+                </div>`)}
+            </section>
+            <button class="add" onClick=${() => { zebar.shellSpawn('explorer.exe', ['ms-settings:sound']).catch(console.error); close(); }}>
+              <i class="nf nf-md-cog_outline"></i> Sound settings
+            </button>
+            ${busy && html`<div class="busy">${busy}</div>`}
+          </div>`;
+      }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
+    </script>
+  </body>
+</html>

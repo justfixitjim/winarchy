@@ -1,6 +1,6 @@
 # winarchy: features to emulate from Omarchy
 
-Planned features (sections 1, 3 and 4 are built, 2 mostly). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
+Planned features (sections 1, 3, 4 and 5 are built, 2 mostly). The goal for each is to get as close to the Omarchy experience as Windows allows. Wrapping existing open-source tools is preferred to building from scratch.
 
 Omarchy references are to [basecamp/omarchy](https://github.com/basecamp/omarchy) (`quattro` branch, November 2026).
 
@@ -182,9 +182,32 @@ winarchy hides the taskbar, which also hides the notification area. Apps that li
 
 ---
 
+## 5. Toggles, indicators and more bar panels
+
+From the Omarchy manual's Toggles, Top Bar, Reminders and Hotkeys chapters (November 2026).
+
+**Built:**
+- Toggles with Omarchy's keys: stay awake (Super+Ctrl+I), do not disturb (Super+Ctrl+Alt+,), night light (menu and bar), hide the bar (Super+Shift+Space), window gaps (Super+Shift+Backspace).
+- Indicators next to the clock for the toggles that are on, plus pending reminders; hover to peek at the rest, click to switch.
+- Reminders: the clock opens a calendar (ISO weeks) with a reminder list and form; winarchy-daemon pops them up.
+- Audio panel (Super+Ctrl+A): default output and input, their volume, per-app volume and mute.
+- Bluetooth panel (Super+Ctrl+B): radio switch, paired devices with battery and connection state.
+- Now-playing widget: play / pause, next, previous.
+- Quake console (Super+`): Windows Terminal's quake window, shown and hidden by winarchy-daemon so GlazeWM doesn't tile it.
+
+**Windows differences:**
+- Night light is winarchy's own colour filter (gamma ramps, like f.lux). Windows' night light keeps its state outside the registry on current builds and has no API.
+- Do not disturb uses the undocumented settings object the Settings app uses (`CLSID_QuietHoursSettings`).
+- Bluetooth can't connect or disconnect devices from the panel (no public API for classic devices); that stays in Settings.
+
+**Open:** world clock, microphone widget, notification history (Win+N covers it), bar position and background style.
+
+---
+
 ## Suggested order
 
 1. ~~**Media utilities.**~~ Built.
 2. ~~**System tray in the bar.**~~ Shipped.
 3. ~~**Theming.**~~ Mostly built (a few apps left). The core of the Omarchy look. Do GlazeWM, Zebar, the menu, Windows and Windows Terminal first, then the third-party apps.
 4. ~~**AI usage panel and switching.**~~ Built. It depends on undocumented usage endpoints, so expect upkeep when they change.
+5. ~~**Toggles and bar panels.**~~ Built.

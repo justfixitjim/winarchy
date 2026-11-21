@@ -1,8 +1,8 @@
 {
   "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
   "name": "winarchy",
-  "version": "1.11.0",
-  "description": "winarchy top bar: GlazeWM workspaces, clock, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
+  "version": "1.12.0",
+  "description": "winarchy top bar: GlazeWM workspaces, clock and reminders, toggles, media, audio, Bluetooth, network, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
   "tags": [
     "topbar",
     "glazewm"
@@ -31,7 +31,7 @@
         "shellCommands": [
           {
             "program": "{{WINARCHY_EXE}}",
-            "argsRegex": "^(ai)?$"
+            "argsRegex": "^(ai|toggle (awake|nightlight|dnd|bar|gaps))?$"
           },
           {
             "program": "explorer.exe",
@@ -60,6 +60,14 @@
           {
             "program": "{{TOP_EXE}}",
             "argsRegex": "^summary \\d+$"
+          },
+          {
+            "program": "powershell.exe",
+            "argsRegex": ".*bluetooth\\.ps1 info$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c type \"?[^&|<>^\"]*\\\\\\.glzr\\\\winarchy\\\\bluetooth\\.json\"?$"
           }
         ]
       },
@@ -258,6 +266,154 @@
           "offsetY": "44px",
           "width": "480px",
           "height": "620px",
+          "monitorSelection": {
+            "type": "primary"
+          },
+          "dockToEdge": {
+            "enabled": false,
+            "edge": null,
+            "windowMargin": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "clock",
+      "htmlPath": "./clock.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": true,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": [
+        "*.html",
+        "*.css",
+        "vendor/*"
+      ],
+      "caching": {
+        "defaultDuration": 604800,
+        "rules": []
+      },
+      "privileges": {
+        "shellCommands": [
+          {
+            "program": "{{WINARCHY_EXE}}",
+            "argsRegex": "^remind (add \\d+( [^\r\n]{1,200})?|remove \\d+|clear)$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c type \"?[^&|<>^\"]*\\\\\\.glzr\\\\winarchy\\\\reminders\\.json\"?$"
+          }
+        ]
+      },
+      "presets": [
+        {
+          "name": "panel",
+          "anchor": "top_center",
+          "offsetX": "0px",
+          "offsetY": "44px",
+          "width": "320px",
+          "height": "520px",
+          "monitorSelection": {
+            "type": "primary"
+          },
+          "dockToEdge": {
+            "enabled": false,
+            "edge": null,
+            "windowMargin": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "audio",
+      "htmlPath": "./audio.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": true,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": [
+        "*.html",
+        "*.css",
+        "vendor/*"
+      ],
+      "caching": {
+        "defaultDuration": 604800,
+        "rules": []
+      },
+      "privileges": {
+        "shellCommands": [
+          {
+            "program": "{{AUDIO_EXE}}",
+            "argsRegex": "^(apps|volume [\\d,]+ \\d+|mute [\\d,]+ (on|off)|default \\{[^ ]+\\}\\.\\{[^ ]+\\})$"
+          },
+          {
+            "program": "explorer.exe",
+            "argsRegex": "^ms-settings:sound$"
+          }
+        ]
+      },
+      "presets": [
+        {
+          "name": "panel",
+          "anchor": "top_right",
+          "offsetX": "-12px",
+          "offsetY": "44px",
+          "width": "360px",
+          "height": "600px",
+          "monitorSelection": {
+            "type": "primary"
+          },
+          "dockToEdge": {
+            "enabled": false,
+            "edge": null,
+            "windowMargin": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bluetooth",
+      "htmlPath": "./bluetooth.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": true,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": [
+        "*.html",
+        "*.css",
+        "vendor/*"
+      ],
+      "caching": {
+        "defaultDuration": 604800,
+        "rules": []
+      },
+      "privileges": {
+        "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": ".*bluetooth\\.ps1 (info|radio (on|off))$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c type \"?[^&|<>^\"]*\\\\\\.glzr\\\\winarchy\\\\bluetooth\\.json\"?$"
+          },
+          {
+            "program": "explorer.exe",
+            "argsRegex": "^ms-settings:bluetooth$"
+          }
+        ]
+      },
+      "presets": [
+        {
+          "name": "panel",
+          "anchor": "top_right",
+          "offsetX": "-12px",
+          "offsetY": "44px",
+          "width": "340px",
+          "height": "420px",
           "monitorSelection": {
             "type": "primary"
           },

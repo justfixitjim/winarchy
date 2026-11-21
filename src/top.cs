@@ -1,7 +1,9 @@
 // winarchy-top: CPU, memory and video memory (VRAM) per process, for the bar and its process panel.
 //
 //   winarchy-top.exe watch [ms]      a JSON line every [ms] (default 1500): totals and every process
-//   winarchy-top.exe summary [ms]    a JSON line every [ms] (default 5000): VRAM totals only (the bar)
+//   winarchy-top.exe summary [ms]    a JSON line every [ms] (default 5000) for the bar: VRAM totals,
+//                                    and the toggles (stay awake, night light, do not disturb,
+//                                    reminders) for its indicators
 //   winarchy-top.exe kill <pid>...   end those processes; prints which ended and which didn't
 //
 // Process times and memory come from one NtQuerySystemInformation call (what Task Manager uses),
@@ -207,14 +209,36 @@ static class Top
     {
         long idle;
         RememberParent(Snapshot(out idle));
+        string dir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
         while (true)
         {
             var sb = new StringBuilder();
-            sb.Append("{\"vramUsed\":").Append(VramUsed()).Append(",\"vramTotal\":").Append(VramTotal()).Append('}');
+            sb.Append("{\"vramUsed\":").Append(VramUsed()).Append(",\"vramTotal\":").Append(VramTotal());
+            // Toggles for the bar's indicators: stay awake and night light (winarchy-daemon's
+            // settings.json), do not disturb (Windows), and pending reminders (reminders.json).
+            string daemon = ReadText(Path.Combine(dir, "settings.json"));
+            bool? dnd = QuietHours.IsOn();
+            sb.Append(",\"awake\":").Append(Flag(daemon, "stayAwake") ? "true" : "false")
+              .Append(",\"nightLight\":").Append(Flag(daemon, "nightLight") ? "true" : "false")
+              .Append(",\"dnd\":").Append(dnd == null ? "null" : dnd.Value ? "true" : "false");
+            string reminders = ReadText(Path.Combine(dir, "reminders.json")).Trim();
+            sb.Append(",\"reminders\":").Append(reminders.StartsWith("[") && reminders.EndsWith("]") ? reminders : "[]");
+            sb.Append('}');
             stdout.WriteLine(sb.ToString());
             Thread.Sleep(interval);
             if (parentPid > 0 && !ParentAlive(Snapshot(out idle))) return 0;
         }
+    }
+
+    static string ReadText(string path)
+    {
+        try { using (var r = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete), Encoding.UTF8)) return r.ReadToEnd(); }
+        catch { return ""; }
+    }
+
+    static bool Flag(string json, string key)
+    {
+        return System.Text.RegularExpressions.Regex.IsMatch(json, "\"" + key + "\"\\s*:\\s*true");
     }
 
     static int Watch(int interval, StreamWriter stdout)
