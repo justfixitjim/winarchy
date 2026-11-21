@@ -158,6 +158,22 @@ if (-not (Test-Path $zxing)) {
     Note 'downloaded ZXing.Net 0.16.9 (QR codes)'
 }
 
+# Explorer right-click: "Convert with winarchy" on pictures and videos (Windows 11 lists it
+# under "Show more options"). Per-user; uninstall.ps1 removes it. Same types as transcode.ps1.
+if (-not $NoMediaTools) {
+    $convertExt = 'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif', 'gif', 'bmp', 'tif', 'tiff',
+        'mp4', 'mov', 'mkv', 'webm', 'avi', 'wmv', 'm4v', 'flv', 'mpg', 'mpeg', '3gp'
+    $convertCmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$toolsDir\transcode.ps1`" -FromExplorer `"%1`""
+    foreach ($e in $convertExt) {
+        $key = "HKCU:\Software\Classes\SystemFileAssociations\.$e\shell\winarchy.convert"
+        New-Item -Path "$key\command" -Force | Out-Null
+        Set-ItemProperty -Path $key -Name '(default)' -Value 'Convert with winarchy'
+        Set-ItemProperty -Path $key -Name 'MultiSelectModel' -Value 'Single'   # one file at a time
+        Set-ItemProperty -Path "$key\command" -Name '(default)' -Value $convertCmd
+    }
+    Note 'Explorer right-click: Convert with winarchy (pictures and videos)'
+}
+
 # Files from the pre-release layout.
 foreach ($old in 'winarchy-menu.exe', 'winarchy-autotile.exe', 'build.ps1', 'src') {
     $p = Join-Path $dest $old

@@ -100,6 +100,7 @@ Omarchy's little utilities, built on ffmpeg, ImageMagick, ZXing.Net and Windows'
 | Menu item | What it does |
 |---|---|
 | **Trigger › Transcode** | Pick a picture or video, then a format and size; the result is saved next to the original and shown in Explorer. Pictures can become jpg, png, webp or avif at original, 2560, 1920 or 1280 px (it also reads HEIC). Videos can become mp4 at original, 4K, 1080p or 720p, a gif at 720, 480 or 360 px wide, or mp3 audio. |
+| **Explorer › right-click › Convert with winarchy** | The same converter for the file you right-clicked, skipping the file picker. On Windows 11 it's under **Show more options** (or Shift+right-click). Pictures and videos only, one file at a time; `-NoMediaTools` leaves it out. |
 | **Trigger › Capture › Screen recording** (Super+Alt+R) | Starts recording the monitor under the mouse; press it again, or click the red REC timer in the bar, to stop. Saves an mp4 to Videos\Screen recordings, using the GPU encoder when there is one. There's no audio yet. |
 | **Trigger › Capture › Text (OCR)** | Snip a region and its text is copied to the clipboard. |
 | **Trigger › Capture › QR code** | Snip a QR code and its contents are copied to the clipboard. |

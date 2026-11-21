@@ -7,10 +7,17 @@
     Videos   (ffmpeg):      mp4 at original / 4K / 1080p / 720p,  gif at 720 / 480 / 360,
                             mp3 (audio only)
 
-    transcode.ps1 [file]
+    transcode.ps1 [file] [-FromExplorer]
+    -FromExplorer (Explorer's "Convert with winarchy" entry) keeps the window open on errors.
 #>
-param([string]$Path)
+param([string]$Path, [switch]$FromExplorer)
 . "$PSScriptRoot\common.ps1"
+trap {
+    if (-not $FromExplorer) { break }   # the menu's terminal shows the error itself
+    Write-Host "`n  $_" -ForegroundColor Red
+    Read-Host '  Press Enter to close'
+    exit 1
+}
 $Host.UI.RawUI.WindowTitle = 'winarchy: Transcode'
 
 $pictureExt = 'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif', 'gif', 'bmp', 'tif', 'tiff'

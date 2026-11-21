@@ -9,8 +9,8 @@ Omarchy references are to [basecamp/omarchy](https://github.com/basecamp/omarchy
 ## 1. Media utilities in the menu (transcode, convert, capture)
 
 > **Status: built (Nov 2026).**
-> - Done: transcode (pictures and videos), screen recording (Super+Alt+R to start and stop, with a red REC timer in the bar that stops it when clicked), text (OCR), read QR, and share Wi-Fi as QR. See the README's Media tools section.
-> - Still open: screen recording with audio or webcam, ASCII art, and the Explorer right-click entry.
+> - Done: transcode (pictures and videos), screen recording (Super+Alt+R to start and stop, with a red REC timer in the bar that stops it when clicked), text (OCR), read QR, share Wi-Fi as QR, and "Convert with winarchy" on pictures and videos in Explorer's right-click menu (under Show more options on Windows 11). See the README's Media tools section.
+> - Still open: screen recording with audio or webcam, and ASCII art.
 
 ### What Omarchy does
 

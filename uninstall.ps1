@@ -38,6 +38,12 @@ if (Test-Path $daemon) {
     Start-Sleep -Milliseconds 500
 }
 
+Step 'Removing the Explorer right-click entry'
+Get-ChildItem 'HKCU:\Software\Classes\SystemFileAssociations' -ErrorAction SilentlyContinue | ForEach-Object {
+    $verb = Join-Path $_.PSPath 'shell\winarchy.convert'
+    if (Test-Path $verb) { Remove-Item $verb -Recurse -Force }
+}
+
 Step 'Removing sign-in shortcut'
 $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
 if (Test-Path $startup) { Remove-Item $startup -Force }
