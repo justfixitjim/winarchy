@@ -123,6 +123,11 @@ The bar sits on the main monitor only (each extra bar costs over 100 MB of memor
   - Click to disconnect.
   - Click to connect: it uses Windows' own dialer and your saved sign-in. If the connection is set to prompt, Windows' sign-in window opens with your details filled in, and Enter connects.
   - To connect with no window at all, untick "Prompt for name and password" in that window's Properties > Options.
+- **Network** (Wi-Fi signal or wired icon, with the Wi-Fi name): hover for your IP address; click for the network panel:
+  - Each Wi-Fi and wired adapter with its state and an on / off switch, and for the connected ones: signal, band and channel (Wi-Fi), speed, IPv4 and IPv6 addresses, gateway, DNS and MAC address. Click an address to copy it.
+  - The Wi-Fi switch works like the Quick Settings tile. Turning a wired adapter off or on needs an administrator, so Windows asks each time (UAC).
+  - Public IP and country, fetched from Cloudflare (`1.1.1.1/cdn-cgi/trace`) when the panel opens, and live download and upload rates.
+  - Network settings opens Windows' network page.
 - **Volume:**
   - Scroll over it to change the volume.
   - Hover to reveal a slider.
@@ -176,7 +181,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `page` to jump to another page, or `items` for a submenu.
 - **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu` and `autotile`. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
-- **Top bar:** `~\.glzr\zebar\winarchyar.html` (`TEMP_UNIT` at the top switches between °F and °C).
+- **Top bar:** `~\.glzr\zebar\winarchy\bar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
 ## Uninstall
 

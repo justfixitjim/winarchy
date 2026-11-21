@@ -274,6 +274,19 @@ body,
 }
 
 /* winarchy: AI usage. */
+.network {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+
+  &:hover i { color: var(--wa-accent); }
+}
+
 .agents {
   display: flex;
   align-items: center;

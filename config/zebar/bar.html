@@ -463,10 +463,14 @@
               )}
 
               {output.network && (
-                <div className="network">
+                <button
+                  className="network"
+                  title={`${output.network.defaultInterface?.ipv4Addresses?.[0] || 'Not connected'}\nClick for network details and Wi-Fi / wired switches`}
+                  onClick={() => zebar.startWidgetPreset('network', 'panel').catch(console.error)}
+                >
                   {getNetworkIcon(output.network)}
                   {output.network.defaultGateway?.ssid}
-                </div>
+                </button>
               )}
 
               {output.memory && (

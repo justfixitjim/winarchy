@@ -260,6 +260,8 @@ $jsVpn = $VpnName.Replace('\', '\\').Replace("'", "\'")
 Write-Utf8 $barHtml ([IO.File]::ReadAllText($barHtml).Replace("const TEMP_UNIT = 'F';", "const TEMP_UNIT = '$unit';").Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace("'", "\'")).Replace('{{VPN_NAME}}', $jsVpn).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')).Replace('{{VPN_PBK}}', $vpnPbk.Replace('\', '\\').Replace("'", "\'")))
 $agentsHtml = Join-Path $pack 'agents.html'
 Write-Utf8 $agentsHtml ([IO.File]::ReadAllText($agentsHtml).Replace('{{AGENTS_PS1}}', (Join-Path $toolsDir 'agents.ps1').Replace('\', '\\')))
+$networkHtml = Join-Path $pack 'network.html'
+Write-Utf8 $networkHtml ([IO.File]::ReadAllText($networkHtml).Replace('{{NETWORK_PS1}}', (Join-Path $toolsDir 'network.ps1').Replace('\', '\\')))
 $zpack = Join-Path $pack 'zpack.json'
 Write-Utf8 $zpack ([IO.File]::ReadAllText($zpack).Replace('{{WINARCHY_EXE}}', $winarchyPath.Replace('"', '\"')))
 Note "temperature in degrees $unit"

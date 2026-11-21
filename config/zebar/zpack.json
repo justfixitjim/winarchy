@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
   "name": "winarchy",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "winarchy top bar: GlazeWM workspaces, clock, system stats and weather. Adapted from the Zebar starter pack (GPL-3.0).",
   "tags": [
     "topbar",
@@ -112,6 +112,57 @@
           "offsetX": "-12px",
           "offsetY": "44px",
           "width": "380px",
+          "height": "560px",
+          "monitorSelection": {
+            "type": "primary"
+          },
+          "dockToEdge": {
+            "enabled": false,
+            "edge": null,
+            "windowMargin": "0px"
+          }
+        }
+      ]
+    },
+    {
+      "name": "network",
+      "htmlPath": "./network.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": true,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": [
+        "*.html",
+        "*.css"
+      ],
+      "caching": {
+        "defaultDuration": 604800,
+        "rules": []
+      },
+      "privileges": {
+        "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": ".*network\\.ps1 (info|public|wifi (on|off)|adapter \\d+ (on|off))$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c type \"?[^&|<>^\"]*\\\\\\.glzr\\\\winarchy\\\\network\\.json\"?$"
+          },
+          {
+            "program": "explorer.exe",
+            "argsRegex": "^ms-settings:network-status$"
+          }
+        ]
+      },
+      "presets": [
+        {
+          "name": "panel",
+          "anchor": "top_right",
+          "offsetX": "-12px",
+          "offsetY": "44px",
+          "width": "360px",
           "height": "560px",
           "monitorSelection": {
             "type": "primary"

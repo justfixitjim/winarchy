@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- winarchy network panel: opened from the bar's network icon. Colours come from theme.css.
+         Plain JavaScript (htm templates, no in-browser compiling) so it opens quickly. -->
+    <link rel="stylesheet" type="text/css" href="./panel.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import React, { useState, useEffect, useRef } from 'https://esm.sh/react@18.3.1';
+      import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+      import htm from 'https://esm.sh/htm@3.1.1';
+      import * as zebar from 'https://esm.sh/zebar@3.3.1';
+
+      const html = htm.bind(React.createElement);
+
+      // winarchy's network script. install.ps1 fills in the path.
+      const NETWORK = '{{NETWORK_PS1}}';
+      const PS = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', NETWORK];
+      // The script saves its last answer here; reading it is much faster than starting PowerShell.
+      const CACHE = NETWORK.replace(/tools\\network\.ps1$/i, 'network.json');
+
+      // Close when focus moves elsewhere, except while a Windows prompt (UAC) is up for a switch.
+      let holdOpen = false;
+      const close = () => zebar.currentWidget().close();
+      window.addEventListener('blur', () => { if (!holdOpen) close(); });
+      window.addEventListener('keydown', e => e.key === 'Escape' && close());
+
+      const live = zebar.createProvider({ type: 'network', refreshInterval: 2000 });
+      const ps = args => zebar.shellExec('powershell.exe', [...PS, ...args]).then(o => JSON.parse(o.stdout.trim() || '{}'));
+
+      function Row({ label, value, copy = true }) {
+        const [copied, setCopied] = useState(false);
+        if (!value) return null;
+        const onClick = () => {
+          if (!copy) return;
+          navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {});
+        };
+        return html`
+          <div class=${`row ${copy ? 'copyable' : ''}`} onClick=${onClick} title=${copy ? 'Click to copy' : ''}>
+            <span class="key">${label}</span>
+            <span class="value">${copied ? 'copied' : value}</span>
+          </div>`;
+      }
+
+      function Switch({ on, disabled, title, onClick }) {
+        return html`
+          <button class=${`toggle ${on ? 'on' : ''}`} disabled=${disabled} title=${title} onClick=${onClick}>
+            <span class="knob"></span>
+          </button>`;
+      }
+
+      const signalIcon = s => s >= 80 ? 'nf-md-wifi_strength_4' : s >= 55 ? 'nf-md-wifi_strength_3'
+        : s >= 30 ? 'nf-md-wifi_strength_2' : 'nf-md-wifi_strength_1';
+      const ipv6 = list => (list || []).find(a => !/^fe80/i.test(a));
+
+      function Adapter({ a, info, net, act, busy }) {
+        const iface = (net?.interfaces || []).find(i => i.friendlyName === a.name);
+        const isDefault = iface?.isDefault;
+        const gateway = isDefault ? net?.defaultGateway : null;
+        const wifi = a.kind === 'wifi';
+        const radioOn = info.wifiRadio === 'on';
+        const on = wifi ? a.enabled && radioOn : a.enabled;
+        const up = a.status === 'Up' && on;
+
+        let state;
+        if (!a.enabled) state = 'Disabled';
+        else if (wifi && !radioOn) state = 'Off';
+        else if (up) state = wifi && gateway?.ssid ? gateway.ssid : 'Connected';
+        else state = wifi ? 'Not connected' : 'Cable unplugged';
+
+        const toggle = () => {
+          if (wifi && a.enabled) return act(`Turning Wi-Fi ${radioOn ? 'off' : 'on'}...`, ['wifi', radioOn ? 'off' : 'on']);
+          return act(`${a.enabled ? 'Disabling' : 'Enabling'} ${a.name}: confirm in the Windows prompt...`,
+            ['adapter', String(a.index), a.enabled ? 'off' : 'on'], true);
+        };
+        const link = info.wifiLink || {};
+        const icon = wifi ? (up ? signalIcon(gateway?.signalStrength ?? 100) : 'nf-md-wifi_off') : (up ? 'nf-md-ethernet' : 'nf-md-ethernet_off');
+
+        return html`
+          <div class=${`card ${up ? 'active' : ''}`}>
+            <div class="card-head">
+              <i class=${`nf ${icon} kind`}></i>
+              <span class="label">${wifi ? 'Wi-Fi' : a.name}${isDefault ? html`<span class="tag">internet</span>` : null}</span>
+              <span class="state">${state}</span>
+              <${Switch}
+                on=${on}
+                disabled=${!!busy}
+                title=${wifi && a.enabled
+                  ? `Turn Wi-Fi ${radioOn ? 'off' : 'on'}`
+                  : `${a.enabled ? 'Disable' : 'Enable'} ${a.name} (Windows asks for permission)`}
+                onClick=${toggle} />
+            </div>
+            ${up && html`
+              <div class="rows">
+                ${wifi && html`<${Row} label="Signal" value=${gateway?.signalStrength != null ? `${gateway.signalStrength}%` : ''} copy=${false} />`}
+                ${wifi && html`<${Row} label="Band" value=${[link.band, link.channel && `channel ${link.channel}`].filter(Boolean).join(', ')} copy=${false} />`}
+                <${Row} label="Speed" value=${wifi ? link.rate || a.speed : a.speed} copy=${false} />
+                <${Row} label="IPv4" value=${iface?.ipv4Addresses?.[0]} />
+                <${Row} label="IPv6" value=${ipv6(iface?.ipv6Addresses)} />
+                <${Row} label="Gateway" value=${gateway?.ipv4Addresses?.[0]} />
+                <${Row} label="DNS" value=${(iface?.dnsServers || []).filter(d => !/^fe80|^fec0/i.test(d)).slice(0, 2).join(', ')} />
+                <${Row} label="MAC" value=${a.mac} />
+              </div>`}
+            <div class="desc">${a.description}</div>
+          </div>`;
+      }
+
+      function rate(m) {
+        if (!m) return '0 B/s';
+        return `${m.siValue >= 100 ? Math.round(m.siValue) : m.siValue.toFixed(1)} ${m.siUnit}/s`;
+      }
+
+      function App() {
+        const [info, setInfo] = useState(null);
+        const [net, setNet] = useState(live.output);
+        const [pub, setPub] = useState(null);
+        const [busy, setBusy] = useState('');
+
+        const refresh = () => ps(['info']).then(setInfo).catch(console.error);
+
+        async function act(label, args, prompt) {
+          setBusy(label);
+          holdOpen = !!prompt;
+          let msg = '';
+          try {
+            const r = await ps(args);
+            if (r.status === 'cancelled') msg = 'Cancelled.';
+            else if (r.ok === false) msg = `Windows refused (${r.status || 'error'}).`;
+          } catch (err) { console.error(err); msg = 'That did not work.'; }
+          await refresh();
+          holdOpen = false;
+          setBusy(msg);
+          if (msg) setTimeout(() => setBusy(''), 3000);
+          if (prompt) zebar.currentWidget().tauriWindow.setFocus().catch(() => {});
+          ps(['public']).then(setPub).catch(() => {});
+        }
+
+        useEffect(() => {
+          const stop = live.onOutput(setNet);
+          // Last known adapters at once, then the current state and public IP in the background.
+          zebar.shellExec('cmd.exe', ['/c', 'type', CACHE])
+            .then(o => { if (o.stdout.trim()) setInfo(JSON.parse(o.stdout.trim())); })
+            .catch(() => {})
+            .finally(refresh);
+          ps(['public']).then(setPub).catch(() => setPub({}));
+          return () => { stop?.(); };
+        }, []);
+
+        const adapters = info?.adapters || [];
+        const traffic = net?.traffic;
+        return html`
+          <div class="panel">
+            <div class="panel-head">
+              <span class="title">Network</span>
+              <button class="link" onClick=${() => { refresh(); ps(['public']).then(setPub).catch(() => {}); }} title="Refresh">
+                <i class="nf nf-md-refresh"></i>
+              </button>
+            </div>
+            ${!info && html`<div class="note">Loading...</div>`}
+            ${info && !adapters.length && html`<div class="note">No Wi-Fi or wired adapters found.</div>`}
+            ${adapters.map(a => html`<${Adapter} key=${a.index} a=${a} info=${info} net=${net} act=${act} busy=${busy} />`)}
+            <section>
+              <div class="provider"><span>Internet</span></div>
+              <div class="rows">
+                <${Row} label="Public IP" value=${pub ? pub.ip || (pub.error ? 'unavailable' : '') : 'checking...'} copy=${!!pub?.ip} />
+                <${Row} label="Country" value=${pub?.country} copy=${false} />
+                <${Row} label="Traffic" value=${traffic ? `down ${rate(traffic.received)}   up ${rate(traffic.transmitted)}` : ''} copy=${false} />
+              </div>
+            </section>
+            <button class="add" onClick=${() => { zebar.shellSpawn('explorer.exe', ['ms-settings:network-status']).catch(console.error); close(); }}>
+              <i class="nf nf-md-cog_outline"></i> Network settings
+            </button>
+            ${busy && html`<div class="busy">${busy}</div>`}
+          </div>`;
+      }
+
+      createRoot(document.getElementById('root')).render(html`<${App} />`);
+    </script>
+  </body>
+</html>
