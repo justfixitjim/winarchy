@@ -58,25 +58,28 @@
         : s >= 30 ? 'nf-md-wifi_strength_2' : 'nf-md-wifi_strength_1';
       const ipv6 = list => (list || []).find(a => !/^fe80/i.test(a));
 
-      function Adapter({ a, info, net, act, busy }) {
+      function Adapter({ a, info, net, act, busy, pending }) {
         const iface = (net?.interfaces || []).find(i => i.friendlyName === a.name);
         const isDefault = iface?.isDefault;
         const gateway = isDefault ? net?.defaultGateway : null;
         const wifi = a.kind === 'wifi';
         const radioOn = info.wifiRadio === 'on';
-        const on = wifi ? a.enabled && radioOn : a.enabled;
-        const up = a.status === 'Up' && on;
+        const actual = wifi ? a.enabled && radioOn : a.enabled;
+        // While a switch is being changed it shows where it's going, straight away.
+        const on = pending ?? actual;
+        const up = a.status === 'Up' && actual;
 
         let state;
-        if (!a.enabled) state = 'Disabled';
+        if (pending != null && pending !== actual) state = pending ? 'Turning on...' : 'Turning off...';
+        else if (!a.enabled) state = 'Disabled';
         else if (wifi && !radioOn) state = 'Off';
         else if (up) state = wifi && gateway?.ssid ? gateway.ssid : 'Connected';
         else state = wifi ? 'Not connected' : 'Cable unplugged';
 
         const toggle = () => {
-          if (wifi && a.enabled) return act(`Turning Wi-Fi ${radioOn ? 'off' : 'on'}...`, ['wifi', radioOn ? 'off' : 'on']);
-          return act(`${a.enabled ? 'Disabling' : 'Enabling'} ${a.name}: confirm in the Windows prompt...`,
-            ['adapter', String(a.index), a.enabled ? 'off' : 'on'], true);
+          if (wifi && a.enabled) return act(a.index, !radioOn, ['wifi', radioOn ? 'off' : 'on']);
+          return act(a.index, !a.enabled, ['adapter', String(a.index), a.enabled ? 'off' : 'on'],
+            `${a.enabled ? 'Disabling' : 'Enabling'} ${a.name}: confirm in the Windows prompt...`);
         };
         const link = info.wifiLink || {};
         const icon = wifi ? (up ? signalIcon(gateway?.signalStrength ?? 100) : 'nf-md-wifi_off') : (up ? 'nf-md-ethernet' : 'nf-md-ethernet_off');
@@ -89,7 +92,7 @@
               <span class="state">${state}</span>
               <${Switch}
                 on=${on}
-                disabled=${!!busy}
+                disabled=${pending != null || busy.endsWith('prompt...')}
                 title=${wifi && a.enabled
                   ? `Turn Wi-Fi ${radioOn ? 'off' : 'on'}`
                   : `${a.enabled ? 'Disable' : 'Enable'} ${a.name} (Windows asks for permission)`}
@@ -120,24 +123,31 @@
         const [net, setNet] = useState(live.output);
         const [pub, setPub] = useState(null);
         const [busy, setBusy] = useState('');
+        const [pending, setPending] = useState({});   // adapter index -> where its switch is going
 
         const refresh = () => ps(['info']).then(setInfo).catch(console.error);
+        const refreshPublic = () => ps(['public']).then(setPub).catch(() => {});
 
-        async function act(label, args, prompt) {
-          setBusy(label);
-          holdOpen = !!prompt;
+        // Flip the switch at once; the script answers with the new state of every adapter.
+        // prompt: the message shown while Windows asks for permission (UAC).
+        async function act(index, turnOn, args, prompt) {
+          setPending(p => ({ ...p, [index]: turnOn }));
+          if (prompt) { setBusy(prompt); holdOpen = true; }
           let msg = '';
           try {
             const r = await ps(args);
+            if (r.info) setInfo(r.info);
             if (r.status === 'cancelled') msg = 'Cancelled.';
             else if (r.ok === false) msg = `Windows refused (${r.status || 'error'}).`;
           } catch (err) { console.error(err); msg = 'That did not work.'; }
-          await refresh();
           holdOpen = false;
+          setPending(p => { const n = { ...p }; delete n[index]; return n; });
           setBusy(msg);
           if (msg) setTimeout(() => setBusy(''), 3000);
           if (prompt) zebar.currentWidget().tauriWindow.setFocus().catch(() => {});
-          ps(['public']).then(setPub).catch(() => {});
+          // A network takes a few seconds to connect after its adapter comes on.
+          if (turnOn && !msg) { setTimeout(refresh, 4000); setTimeout(() => { refresh(); refreshPublic(); }, 10000); }
+          else refreshPublic();
         }
 
         useEffect(() => {
@@ -157,13 +167,13 @@
           <div class="panel">
             <div class="panel-head">
               <span class="title">Network</span>
-              <button class="link" onClick=${() => { refresh(); ps(['public']).then(setPub).catch(() => {}); }} title="Refresh">
+              <button class="link" onClick=${() => { refresh(); refreshPublic(); }} title="Refresh">
                 <i class="nf nf-md-refresh"></i>
               </button>
             </div>
             ${!info && html`<div class="note">Loading...</div>`}
             ${info && !adapters.length && html`<div class="note">No Wi-Fi or wired adapters found.</div>`}
-            ${adapters.map(a => html`<${Adapter} key=${a.index} a=${a} info=${info} net=${net} act=${act} busy=${busy} />`)}
+            ${adapters.map(a => html`<${Adapter} key=${a.index} a=${a} info=${info} net=${net} act=${act} busy=${busy} pending=${pending[a.index]} />`)}
             <section>
               <div class="provider"><span>Internet</span></div>
               <div class="rows">

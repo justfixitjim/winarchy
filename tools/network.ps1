@@ -9,6 +9,7 @@
     network.ps1 adapter <n> on|off
                                   Enable or disable the adapter with interface index <n>.
                                   Windows requires an administrator for this, so it asks (UAC).
+    The switches answer with the new adapter state (as "info"), saving the panel a second run.
 #>
 param(
     [Parameter(Position = 0)][string]$Command = 'info',
@@ -20,9 +21,7 @@ $stateDir = if ($env:WINARCHY_NETWORK_STATE) { $env:WINARCHY_NETWORK_STATE } els
 $cache = Join-Path $stateDir 'network.json'
 
 function Write-Json($obj) {
-    $json = $obj | ConvertTo-Json -Depth 5 -Compress
-    [Console]::Out.Write($json)
-    return $json
+    [Console]::Out.Write(($obj | ConvertTo-Json -Depth 6 -Compress))
 }
 
 # Windows.Devices.Radios (WinRT) from Windows PowerShell: wait on its async calls.
@@ -63,38 +62,52 @@ function Get-WifiLink {
     return $link
 }
 
-switch ($Command) {
-    'info' {
-        # Physical Wi-Fi and wired adapters only (no VPN, Bluetooth or virtual switches), including
-        # disabled ones so they can be switched back on.
-        $adapters = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object {
-                $_.NdisPhysicalMedium -in 9, 14 -or $_.PhysicalMediaType -in 'Native 802.11', '802.3' } |
-            Sort-Object { if ($_.Status -eq 'Up') { 0 } else { 1 } }, Name | ForEach-Object {
-                $wifi = $_.NdisPhysicalMedium -eq 9 -or $_.PhysicalMediaType -eq 'Native 802.11'
-                [ordered]@{
-                    index       = $_.ifIndex
-                    name        = $_.Name
-                    kind        = $(if ($wifi) { 'wifi' } else { 'wired' })
-                    description = $_.InterfaceDescription
-                    status      = [string]$_.Status          # Up, Disconnected, Disabled
-                    enabled     = $_.Status -ne 'Disabled'
-                    speed       = $(if ($_.Status -eq 'Up') { $_.LinkSpeed } else { '' })
-                    mac         = $_.MacAddress -replace '-', ':'
-                }
-            })
-        $radio = 'none'
-        if ($adapters | Where-Object kind -eq 'wifi') {
-            try { $r = Get-WifiRadio; $radio = $(if ($r) { ([string]$r.State).ToLower() } else { 'unknown' }) } catch { $radio = 'unknown' }
-        }
-        $result = [ordered]@{
-            updated   = (Get-Date).ToString('o')
-            wifiRadio = $radio                               # on, off, disabled, unknown, none
-            wifiLink  = $(if ($adapters | Where-Object { $_.kind -eq 'wifi' -and $_.status -eq 'Up' }) { Get-WifiLink } else { @{} })
-            adapters  = $adapters
-        }
-        $json = Write-Json $result
-        try { New-Item -ItemType Directory -Force -Path $stateDir | Out-Null; [IO.File]::WriteAllText($cache, $json) } catch { }
+function Format-Speed([UInt64]$bps) {
+    if (-not $bps -or $bps -ge [UInt64]::MaxValue - 1) { return '' }
+    if ($bps -ge 1e9) { return ('{0:0.#} Gbps' -f ($bps / 1e9)) }
+    return ('{0:0} Mbps' -f ($bps / 1e6))
+}
+
+# Physical Wi-Fi (NDIS medium 9) and wired (14) adapters only: no VPN, Bluetooth, virtual switches
+# or USB dongles. Disabled ones are included so they can be switched back on. Also saves the
+# result for the panel to show at once next time.
+function Get-Info {
+    $adapters = @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter -Filter 'HardwareInterface = TRUE' |
+        Where-Object { $_.NdisPhysicalMedium -in 9, 14 } | ForEach-Object {
+            $disabled = $_.State -eq 3
+            $up = -not $disabled -and $_.MediaConnectState -eq 1
+            $mac = "$($_.PermanentAddress)"
+            if ($mac.Length -eq 12) { $mac = ($mac -split '(..)' -ne '') -join ':' }
+            [ordered]@{
+                index       = [int]$_.InterfaceIndex
+                name        = $_.Name
+                kind        = $(if ($_.NdisPhysicalMedium -eq 9) { 'wifi' } else { 'wired' })
+                description = $_.InterfaceDescription
+                status      = $(if ($disabled) { 'Disabled' } elseif ($up) { 'Up' } else { 'Disconnected' })
+                enabled     = -not $disabled
+                speed       = $(if ($up) { Format-Speed $_.Speed } else { '' })
+                mac         = $mac
+            }
+        } | Sort-Object { if ($_.status -eq 'Up') { 0 } else { 1 } }, { $_.name })
+    $radio = 'none'
+    if ($adapters | Where-Object { $_.kind -eq 'wifi' }) {
+        try { $r = Get-WifiRadio; $radio = $(if ($r) { ([string]$r.State).ToLower() } else { 'unknown' }) } catch { $radio = 'unknown' }
     }
+    $result = [ordered]@{
+        updated   = (Get-Date).ToString('o')
+        wifiRadio = $radio                               # on, off, disabled, unknown, none
+        wifiLink  = $(if ($adapters | Where-Object { $_.kind -eq 'wifi' -and $_.status -eq 'Up' }) { Get-WifiLink } else { @{} })
+        adapters  = $adapters
+    }
+    try {
+        New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+        [IO.File]::WriteAllText($cache, ($result | ConvertTo-Json -Depth 5 -Compress))
+    } catch { }
+    return $result
+}
+
+switch ($Command) {
+    'info' { Write-Json (Get-Info) | Out-Null }
     'public' {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         try {
@@ -112,19 +125,23 @@ switch ($Command) {
         if (-not $r) { throw 'No Wi-Fi radio found.' }
         $state = [Windows.Devices.Radios.RadioState]$(if ($Arg1 -eq 'on') { 'On' } else { 'Off' })
         $status = & $script:Await ($r.SetStateAsync($state)) ([Windows.Devices.Radios.RadioAccessStatus])
-        Write-Json @{ ok = ([string]$status -eq 'Allowed'); status = [string]$status } | Out-Null
+        Write-Json ([ordered]@{ ok = ([string]$status -eq 'Allowed'); status = [string]$status; info = (Get-Info) }) | Out-Null
     }
     'adapter' {
         if ($Arg1 -notmatch '^\d+$' -or $Arg2 -notin 'on', 'off') { throw 'usage: network.ps1 adapter <index> on|off' }
-        $verb = $(if ($Arg2 -eq 'on') { 'Enable-NetAdapter' } else { 'Disable-NetAdapter' })
-        $cmd = "Get-NetAdapter -InterfaceIndex $([int]$Arg1) | $verb -Confirm:`$false"
+        # The elevated copy calls the adapter's Enable / Disable method directly (no module to load).
+        $method = $(if ($Arg2 -eq 'on') { 'Enable' } else { 'Disable' })
+        $cmd = "`$r = Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter -Filter 'InterfaceIndex = $([int]$Arg1)' | " +
+            "Invoke-CimMethod -MethodName $method; exit [int]`$r.ReturnValue"
         try {
             $p = Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -Wait -PassThru `
                 -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $cmd
-            Write-Json @{ ok = ($p.ExitCode -eq 0) } | Out-Null
+            $out = [ordered]@{ ok = ($p.ExitCode -eq 0); status = $(if ($p.ExitCode) { "error $($p.ExitCode)" } else { 'done' }) }
         } catch {
-            Write-Json @{ ok = $false; status = 'cancelled' } | Out-Null   # UAC prompt declined
+            $out = [ordered]@{ ok = $false; status = 'cancelled' }   # UAC prompt declined
         }
+        $out.info = Get-Info
+        Write-Json $out | Out-Null
     }
     default { throw "Unknown command: $Command" }
 }
