@@ -224,7 +224,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `glaze` for a GlazeWM command.
   - `terminal` for PowerShell run in Windows Terminal.
   - `page` to jump to another page, or `items` for a submenu.
-- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
+- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), `barWatchdog`, plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
 - **Top bar:** `~\.glzr\zebar\winarchy\bar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
@@ -250,6 +250,7 @@ This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Ter
   - **Taskbar hiding.** It auto-hides the taskbar, then hides it outright.
   - **Automatic splits.** It listens on GlazeWM's IPC socket and sets each focused window's split direction from its shape, giving Hyprland-style dwindle tiling.
   - **Stay awake and night light.** It holds Windows' "keep the system and display on" request, and sets each display's colour ramp (re-applying it after sleep or a display change).
+  - **Bar watchdog.** Once in a while Zebar starts without its local web server and the bar is just a grey strip. Every 5 seconds the daemon checks; if Zebar is running but its server isn't, it restarts Zebar (at most 3 times in 10 minutes). Turn it off with `"barWatchdog": false`.
   - **Reminders.** It watches `reminders.json` and pops each one up when it's due.
   - **Drop-down terminal.** On Super+` it opens Windows Terminal's quake window with the tab title `winarchy-dropdown` (which GlazeWM's window rules ignore, so it isn't tiled), and shows or hides it after that. Terminal also hides it by itself when you click elsewhere.
 

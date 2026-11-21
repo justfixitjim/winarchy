@@ -16,13 +16,14 @@
 //   winarchy-daemon --awake            toggle "stay awake" (no sleep, no screen off)
 //   winarchy-daemon --nightlight       toggle night light (a warm 4000 K colour filter)
 //
+//  * Bar watchdog - restarts Zebar if it runs without its local web server (the grey bar).
 //  * Reminders  - pops up reminders.json entries (written by `winarchy remind`) when they're due.
 //  * Drop-down terminal - Super+` shows / hides Windows Terminal's quake window (opened with
 //                 the title "winarchy-dropdown", which GlazeWM's window rules ignore).
 //
 // Options live in settings.json next to the exe:
 //   { "hideTaskbar": true, "blockStartMenu": true, "autotile": true, "quakeTerminal": true,
-//     "stayAwake": false, "nightLight": false }
+//     "barWatchdog": true, "stayAwake": false, "nightLight": false }
 //
 // Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
 
@@ -97,6 +98,7 @@ static class Daemon
             });
 
             Reminders.Start(Dir);
+            if (Flag("barWatchdog", true)) BarWatchdog.Start();
 
             var taskbarTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             taskbarTimer.Tick += delegate { if (Flag("hideTaskbar", true)) Taskbar.Hide(OriginalAutoHidePath); };
@@ -681,5 +683,59 @@ static class Reminders
         shown++;
         form.Show();
         System.Media.SystemSounds.Exclamation.Play();
+    }
+}
+
+// Bar watchdog: now and then Zebar starts without its local web server (127.0.0.1:6124), and the
+// bar shows only a grey "can't connect" page. Every 5 seconds, if Zebar has been running for a
+// while but nothing listens on that port, stop it and start it again (with a pause, so the old
+// one is fully gone). If the bar is hidden on purpose (no Zebar running), nothing happens.
+static class BarWatchdog
+{
+    const int Port = 6124;
+    static System.Threading.Timer timer;
+    static int busy;
+    static readonly List<DateTime> restarts = new List<DateTime>();
+    static readonly string ZebarExe = Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\Zebar\zebar.exe");
+
+    public static void Start()
+    {
+        timer = new System.Threading.Timer(Check, null, 20000, 5000);
+    }
+
+    static bool Listening()
+    {
+        try
+        {
+            foreach (var ep in System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners())
+                if (ep.Port == Port) return true;
+        }
+        catch { return true; } // can't tell: leave it alone
+        return false;
+    }
+
+    static void Check(object state)
+    {
+        if (Interlocked.Exchange(ref busy, 1) == 1) return;
+        try
+        {
+            var zebar = System.Diagnostics.Process.GetProcessesByName("zebar");
+            if (zebar.Length == 0 || Listening()) return;
+            // Give a freshly started Zebar time to open its server.
+            foreach (var p in zebar)
+                try { if (DateTime.Now - p.StartTime < TimeSpan.FromSeconds(15)) return; } catch { }
+            // At most 3 restarts in 10 minutes, in case something else is wrong.
+            restarts.RemoveAll(t => DateTime.Now - t > TimeSpan.FromMinutes(10));
+            if (restarts.Count >= 3) return;
+            restarts.Add(DateTime.Now);
+
+            foreach (var p in zebar) { try { p.Kill(); } catch { } }
+            foreach (var p in zebar) { try { p.WaitForExit(5000); } catch { } }
+            Thread.Sleep(4000); // its WebView2 processes and port must be gone first
+            if (System.Diagnostics.Process.GetProcessesByName("zebar").Length == 0)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ZebarExe) { UseShellExecute = true });
+        }
+        catch { }
+        finally { Interlocked.Exchange(ref busy, 0); }
     }
 }
