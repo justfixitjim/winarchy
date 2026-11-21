@@ -116,16 +116,19 @@
                 <button class="link x" title="Cancel" onClick=${() => remind(['remind', 'remove', String(r.id)])}><i class="nf nf-md-close"></i></button>
               </div>`)}
             <form class="remind-form" onSubmit=${add}>
-              <div class="search">
-                <i class="nf nf-md-alarm_plus"></i>
-                <input ref=${textRef} placeholder="Remind me to..." value=${text} onInput=${e => setText(e.target.value)} maxlength="200" />
+              <div class="remind-row">
+                <div class="search">
+                  <i class="nf nf-md-alarm_plus"></i>
+                  <input ref=${textRef} placeholder="Remind me to..." value=${text} onInput=${e => setText(e.target.value)} maxlength="200" />
+                </div>
+                <button type="submit" class="use">Add</button>
               </div>
               <div class="quick">
                 <span class="wx-dim">in</span>
                 ${['5', '10', '25', '60'].map(m => html`
                   <button type="button" class=${`switch ${minutes === m ? 'on' : ''}`} onClick=${() => setMinutes(m)}>${m}m</button>`)}
                 <input class="mins" type="number" min="1" max="1440" value=${minutes} onInput=${e => setMinutes(e.target.value)} title="Minutes" />
-                <button type="submit" class="use">Add</button>
+                <span class="wx-dim">min</span>
               </div>
             </form>
           </section>`;

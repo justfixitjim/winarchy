@@ -18,6 +18,7 @@ body {
   box-sizing: border-box;
   max-height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px 14px;
   background: var(--wa-bg);
   border: 1px solid var(--wa-accent);
@@ -454,14 +455,26 @@ body:has(.procs) #root { height: 100%; }
 }
 
 .remind-form .search input { padding: 2px 0; }
+.remind-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 10px;
+
+  .search { flex: 1; min-width: 0; margin-top: 0; }
+  .use { flex-shrink: 0; padding: 0 12px; }
+}
 .quick {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
 
+  .switch { padding: 2px 5px; }
   .mins {
-    width: 44px;
+    width: 40px;
+    appearance: textfield;
+    &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { appearance: none; margin: 0; }
     font: inherit;
     color: var(--wa-fg);
     background: color-mix(in srgb, var(--wa-fg) 6%, transparent);
@@ -470,7 +483,6 @@ body:has(.procs) #root { height: 100%; }
     outline: none;
     &:focus { border-color: color-mix(in srgb, var(--wa-accent) 60%, transparent); }
   }
-  .use { margin-left: auto; padding: 2px 12px; }
 }
 
 /* ── Audio panel ───────────────────────────────────────────────────── */
