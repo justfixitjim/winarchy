@@ -512,6 +512,15 @@ if (Want 'terminal') {
 }
 
 Try-Target 'terminal' {
+    if (-not $terminalSettings -and (Get-AppxPackage Microsoft.WindowsTerminal -ErrorAction SilentlyContinue)) {
+        # Terminal writes settings.json the first time it opens, so a fresh install has none yet.
+        # Start one; Terminal adds its profiles and defaults to it on first launch.
+        $dir = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $new = Join-Path $dir 'settings.json'
+        Write-Text $new "{`n    `"`$schema`": `"https://aka.ms/terminal-profiles-schema`",`n    `"profiles`": { `"defaults`": {}, `"list`": [] },`n    `"schemes`": []`n}`n"
+        $terminalSettings = $script:terminalSettings = @($new)
+    }
     if (-not $terminalSettings) { Log '  terminal: Windows Terminal not found, skipped'; return }
     Save-Backup
     $tc = $t.terminal

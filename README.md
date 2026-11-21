@@ -222,6 +222,8 @@ This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Ter
 
 - **`winarchy.exe`** is a small WinForms app. It provides the menu, the cheat sheet, and launchers that find your default browser and installed apps through the Start menu's app list, so one config works on any PC. GlazeWM starts a resident copy at sign-in (`winarchy.exe --resident`), so Super+Space only has to show a window that's already loaded; if it isn't running, the menu opens the normal way and starts it.
 - **`tools\*.ps1`** are the media tools, the theme switcher (`theme.ps1`) and the AI accounts tool (`agents.ps1`). The bar runs `agents.ps1 usage`, which answers from a cache and only re-checks usage every few minutes.
+- **The bar and its panels** (`config\zebar`) are plain JavaScript pages with htm templates, so nothing is compiled when they open. Their libraries (React, htm, Zebar's client) and the Nerd Fonts icon font are bundled in `config\zebarendor`, so the bar works without internet. `vendoruild.ps1` rebuilds that bundle from the pinned versions in `vendor\package.json` (needs Node.js; only for updating them).
+- **`winarchy-top.exe`** reads CPU, memory and video memory per process for the bar and the process panel.
 - **`winarchy-daemon.exe`** is started by GlazeWM and does three things:
   - **Start menu blocking.** GlazeWM swallows Super+key combos, which makes Windows think Super was tapped alone and open Start. The daemon injects an unassigned "mask" key (0xE8) when Super goes down, so that never happens.
   - **Taskbar hiding.** It auto-hides the taskbar, then hides it outright.
