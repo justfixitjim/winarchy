@@ -200,7 +200,7 @@
                 "label": "Screen recording (start / stop)",
                 "run": "powershell.exe",
                 "args": "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\record.ps1\"",
-                "hint": "this monitor"
+                "hint": "Super+Shift+R"
               },
               {
                 "label": "Text (OCR)",

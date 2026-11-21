@@ -90,10 +90,13 @@
           const timer = setInterval(prune, 30000);
           return () => { stopped = true; clearInterval(timer); };
         }, [idsKey, open]);
-        const icons = allIcons.filter(i => !dead.has(i.id));
-        if (!icons.length) return null;
+        const live = allIcons.filter(i => !dead.has(i.id));
+        const rec = live.find(isRecording);
+        const icons = live.filter(i => !isRecording(i));
+        if (!icons.length && !rec) return null;
         return (
           <div className={`tray ${open ? 'open' : ''}`}>
+            {rec && <Recording key={rec.id} icon={rec} systray={systray} />}
             {open && icons.map(icon => (
               <img
                 key={icon.id}
@@ -108,11 +111,31 @@
                 onMouseLeave={() => systray.onHoverLeave(icon.id)}
               />
             ))}
-            <button className="tray-toggle" title={open ? 'Hide tray icons' : 'Show tray icons'} onClick={toggle}>
-              <i className={`nf ${open ? 'nf-md-chevron_right' : 'nf-md-chevron_left'}`}></i>
-              {!open && <span> {icons.length}</span>}
-            </button>
+            {icons.length > 0 && (
+              <button className="tray-toggle" title={open ? 'Hide tray icons' : 'Show tray icons'} onClick={toggle}>
+                <i className={`nf ${open ? 'nf-md-chevron_right' : 'nf-md-chevron_left'}`}></i>
+                {!open && <span> {icons.length}</span>}
+              </button>
+            )}
           </div>
+        );
+      }
+
+      // Screen recording (tools/record.ps1) keeps a tray icon with this text while it runs.
+      const isRecording = icon => (icon.tooltip || '').startsWith('winarchy recording');
+
+      function Recording({ icon, systray }) {
+        const [start] = useState(() => Date.now());
+        const [, setTick] = useState(0);
+        useEffect(() => {
+          const timer = setInterval(() => setTick(n => n + 1), 1000);
+          return () => clearInterval(timer);
+        }, []);
+        const s = Math.floor((Date.now() - start) / 1000);
+        return (
+          <button className="rec" title="Recording this screen. Click or press Super+Shift+R to stop." onClick={() => systray.onLeftClick(icon.id)}>
+            <span className="rec-dot"></span>REC {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
+          </button>
         );
       }
 

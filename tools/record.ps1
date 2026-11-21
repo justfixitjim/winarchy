@@ -1,6 +1,8 @@
 <#
     winarchy: Screen recording toggle (Omarchy's "Trigger > Capture > Screenrecord").
-    Run once to start recording the monitor under the mouse; run again to stop.
+    Run once to start recording the monitor under the mouse; run again to stop (Super+Shift+R).
+    While recording, a red tray icon shows; the bar turns it into a REC timer, and clicking
+    it also stops the recording.
     Saves to Videos\Screen recordings\winarchy-<date>.mp4 and shows it in Explorer.
     Uses the GPU encoder (NVENC) when there is one, otherwise x264. No audio.
 #>
@@ -89,4 +91,35 @@ if (-not $proc) {
 }
 
 @{ pid = $proc.Id; file = $file; temp = $temp } | ConvertTo-Json | Set-Content $state -Encoding UTF8
-Show-Note 'Recording' "Recording this screen. Run Screen recording again to stop." 3
+
+# Stay running with a red tray icon until the recording stops. The bar shows this icon as a
+# REC timer. Clicking it stops the recording here; pressing the hotkey again runs a second
+# copy of this script, which stops ffmpeg, and this copy then sees it exit and cleans up.
+$bmp = New-Object System.Drawing.Bitmap 16, 16
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+$g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(235, 70, 70))), 2, 2, 12, 12)
+$g.Dispose()
+$tray = New-Object System.Windows.Forms.NotifyIcon
+$tray.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+$tray.Text = 'winarchy recording - click to stop'   # the bar looks for this text
+$tray.Visible = $true
+$tray.ShowBalloonTip(3000, 'Recording', 'Recording this screen. Press Super+Shift+R or click REC in the bar to stop.', [System.Windows.Forms.ToolTipIcon]::None)
+
+$script:stopping = $false
+$tray.Add_MouseClick({
+    param($sender, $e)
+    if ($e.Button -ne [System.Windows.Forms.MouseButtons]::Left -or $script:stopping) { return }
+    $script:stopping = $true
+    $tray.Visible = $false
+    try { if (Test-Path $state) { Stop-Recording (Get-Content $state -Raw | ConvertFrom-Json) } }
+    finally { [System.Windows.Forms.Application]::ExitThread() }
+})
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 500
+$timer.Add_Tick({ if (-not $script:stopping -and $proc.HasExited) { [System.Windows.Forms.Application]::ExitThread() } })
+$timer.Start()
+[System.Windows.Forms.Application]::Run()
+$timer.Dispose()
+$tray.Visible = $false
+$tray.Dispose()
