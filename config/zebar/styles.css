@@ -288,6 +288,8 @@ body,
   white-space: nowrap;
 
   .stat i { margin-right: 4px; }
+  /* The graphics-card glyph is wide and flat; stand it up and enlarge it to match CPU and RAM. */
+  .stat .vram-icon { display: inline-block; transform: rotate(90deg) scale(1.15); margin: 0 5px 0 1px; }
   .mid { color: var(--wa-yellow); }
   .high { color: var(--wa-red); }
   &:hover i { color: var(--wa-accent); }

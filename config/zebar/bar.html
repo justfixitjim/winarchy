@@ -171,7 +171,7 @@
           <button className="stats" title={tip} onClick={() => zebar.startWidgetPreset('processes', 'panel').catch(console.error)}>
             {cpu && <span className="stat"><i className="nf nf-oct-cpu"></i><span className={level(cpu.usage)}>{Math.round(cpu.usage)}%</span></span>}
             {memory && <span className="stat"><i className="nf nf-fae-chip"></i><span className={level(memory.usage)}>{Math.round(memory.usage)}%</span></span>}
-            {vp != null && <span className="stat"><i className="nf nf-md-expansion_card"></i><span className={level(vp)}>{Math.round(vp)}%</span></span>}
+            {vp != null && <span className="stat"><i className="nf nf-md-expansion_card vram-icon"></i><span className={level(vp)}>{Math.round(vp)}%</span></span>}
           </button>
         );
       }
