@@ -245,6 +245,43 @@ Keep the day's to-dos in view: a line of text in the bar that scrolls sideways t
 - Where new tasks go: the end of the file, or under the `## Today` heading?
 - How the ticker moves: a continuous scroll, or one task at a time every few seconds (easier to read, less distracting)?
 
+## 9. Satisfying sounds (planned, optional)
+
+Short, tactile sound effects for things you do, like a good mechanical keyboard. All optional: one switch turns them all off, and each sound can be turned off on its own.
+
+**The tasks idea (section 8)**
+- Add a task: a soda can cracking open.
+- Tick a task off: an ice cube dropping into a glass.
+- Last task of the day done: a longer pour and fizz, as a small reward.
+
+**Other places it would feel good**
+
+| Event | Sound | Default |
+|---|---|---|
+| Reminder pops up | soft kalimba or bell note | on |
+| Screen recording starts / stops | camera record beep up / down | on (useful feedback) |
+| Screenshot, text capture (OCR), QR scan | camera shutter | on |
+| Theme change | a record needle drop | on |
+| Background change | a page flip or slide-projector click | on |
+| Stay awake on / off | a coffee pour / a mug set down | on |
+| Night light on / off | a match strike / a soft blow-out | on |
+| Do not disturb on | a door closing quietly | on |
+| VPN connected / disconnected | a lock clicking shut / open | on |
+| Other toggles (gaps, bar, taskbar) | a light switch click | on |
+| Super+W closes a window | a soft pop | off (frequent) |
+| Workspace switch | a quiet tick | off (frequent) |
+| Menu opens | a faint paper rustle | off (frequent) |
+| Something failed | a gentle low thud | on |
+
+**Rules**
+- Short (under about 400 ms) and quiet by default, with one volume setting.
+- Things you do dozens of times an hour (switching workspaces, opening the menu, closing windows) start off.
+- Silent while Do not disturb is on, and while a fullscreen app or game has focus.
+- Played by winarchy itself from WAV files loaded in advance, so there's no delay (no PowerShell, no media player starting).
+- Sounds must be free to ship with the repo: CC0 (for example from freesound.org, filtered to CC0) or recorded or made for winarchy. Keep a CREDITS file next to them.
+- Settings: `sounds: true|false`, `soundVolume`, and per-event switches in settings.json, plus a toggle in menu → Toggles. A user can swap any sound by dropping a WAV with the same name into `~\.glzr\winarchy\sounds`.
+- Default for new installs: off, with a one-line hint in the README and the Toggles menu, so nobody is surprised by noise at work.
+
 ---
 
 ## Suggested order
