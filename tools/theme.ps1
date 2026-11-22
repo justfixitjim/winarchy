@@ -375,6 +375,13 @@ $cur = [ordered]@{ id = $pick.Id; name = $t.name; mode = $t.mode; background = 0
 Write-Text $currentPath (($cur | ConvertTo-Json -Depth 5) + "`n")
 if (Want 'menu') { Log '  menu: next time it opens' }
 
+# GlazeWM and Zebar: per-user copy (install.ps1 -User) first, then Program Files.
+function Get-GlzrPath([string]$Relative) {
+    $user = Join-Path $env:LOCALAPPDATA "Programs\glzr.io\$Relative"
+    if (Test-Path $user) { return $user }
+    return Join-Path $env:ProgramFiles "glzr.io\$Relative"
+}
+
 Try-Target 'glazewm' {
     $cfg = Join-Path $env:USERPROFILE '.glzr\glazewm\config.yaml'
     if (-not (Test-Path $cfg)) { throw 'GlazeWM config not found' }
@@ -384,7 +391,7 @@ Try-Target 'glazewm' {
     $new = [regex]::Replace($new, ($pat -f 'other_windows'), "`$1'$($c.border_inactive)'")
     if ($new -ne $y) { Write-Text $cfg $new }
     if (-not $NoReload -and (Get-Process glazewm -ErrorAction SilentlyContinue)) {
-        & "$env:ProgramFiles\glzr.io\GlazeWM\cli\glazewm.exe" command wm-reload-config | Out-Null
+        & (Get-GlzrPath "GlazeWM\cli\glazewm.exe") command wm-reload-config | Out-Null
     }
     Log '  glazewm: borders'
 }
@@ -409,7 +416,7 @@ Try-Target 'bar' {
             Start-Sleep -Milliseconds 250
         }
         Start-Sleep -Seconds 3
-        Start-Process "$env:ProgramFiles\glzr.io\Zebar\zebar.exe"
+        Start-Process (Get-GlzrPath "Zebar\zebar.exe")
     }
     Log '  bar: colours'
 }

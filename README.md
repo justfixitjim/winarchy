@@ -23,7 +23,7 @@ It's a thin layer over good existing tools:
 
 winarchy is a young personal project (v0.1), so far run on one PC. Read [what it changes](#what-it-changes-and-how-to-undo-it) first; `.\uninstall.ps1` puts everything back.
 
-**Needs:** Windows 11, [winget](https://learn.microsoft.com/windows/package-manager/winget/) (App Installer), and a normal (non-admin) PowerShell. Any keyboard layout and any number of monitors.
+**Needs:** Windows 11, [winget](https://learn.microsoft.com/windows/package-manager/winget/) (App Installer), and a normal (non-admin) PowerShell. Any keyboard layout and any number of monitors. Some of the apps' installers (GlazeWM, Zebar, ImageMagick, the font) ask for admin approval; if you can't give it, add `-User` and nothing will.
 
 In PowerShell:
 
@@ -39,7 +39,7 @@ That installs release v0.1.0. To pass options that way, run it as a script block
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
-1. Installs GlazeWM, Zebar, Windows Terminal, JetBrainsMono Nerd Font, Handy, ffmpeg and ImageMagick with winget, skipping any already installed, and [herdr](https://github.com/herdrdev/herdr) with its official installer (per-user, no admin; it isn't in winget).
+1. Installs GlazeWM, Zebar, Windows Terminal, JetBrainsMono Nerd Font, Handy, ffmpeg and ImageMagick with winget, skipping any already installed, and [herdr](https://github.com/herdrdev/herdr) with its official installer (per-user, no admin; it isn't in winget). With `-User`, GlazeWM and Zebar are instead unpacked from their official releases into `%LOCALAPPDATA%\Programs\glzr.io` (checked against pinned hashes), the font is installed for your account only, and ImageMagick is skipped.
 2. Builds `winarchy.exe`, `winarchy-daemon.exe`, `winarchy-top.exe` and `winarchy-audio.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
@@ -59,11 +59,12 @@ Re-run it any time to upgrade. Options:
 - `-VpnName <name>` picks which Windows VPN connection the bar's VPN button controls (default: the first one found; `none` hides it).
 - `-WithPowerToys` also installs PowerToys. winarchy doesn't need it, but its other tools (Peek, Always on top, ZoomIt) are handy.
 - `-NoMediaTools` skips ffmpeg, ImageMagick and Explorer's "Convert with winarchy" entry.
+- `-User` installs without admin: everything goes into your user profile (see step 1). Picture conversion needs ImageMagick, so it won't work unless an admin installs that.
 - `-Ref main` (with `irm ... | iex`) installs the latest, untested changes instead of the release.
 
 ### What it changes, and how to undo it
 
-Everything is per-user; nothing needs admin. `.\uninstall.ps1` undoes all of it (`-RemoveApps` also uninstalls GlazeWM and Zebar; the other apps stay).
+winarchy's own changes are all per-user and need no admin. `.\uninstall.ps1` undoes all of it (`-RemoveApps` also removes GlazeWM and Zebar, wherever they were installed; the other apps stay).
 
 | Change | Undo on its own |
 |---|---|
@@ -292,6 +293,7 @@ The helpers are built on your PC from the source in `src\`, so they're unsigned,
 
 ## Known limits
 
+- Some workplaces only allow programs from Program Files (AppLocker or similar). winarchy builds its helpers in your profile, so it won't run there, with or without `-User`.
 - Now and then Zebar starts without its local web server and the bar is a grey strip; the daemon notices and restarts it within about 20 seconds.
 - Night light is a colour filter on the displays, so it doesn't show in screenshots or recordings, and it can briefly drop after sleep (it's put back within 5 seconds).
 - The bar is on the main monitor only (see [Top bar](#top-bar)).

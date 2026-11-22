@@ -3,7 +3,8 @@
     Installs winarchy: Omarchy-style, keyboard-driven tiling for Windows 11.
 
 .DESCRIPTION
-    - Installs GlazeWM (+ Zebar bar), Windows Terminal and Handy (dictation) with winget.
+    - Installs GlazeWM (+ Zebar bar), Windows Terminal and Handy (dictation) with winget
+      (or, with -User, for your account only with no admin prompt).
     - Builds winarchy.exe and winarchy-daemon.exe from source with the C# compiler
       that ships with Windows (nothing prebuilt is downloaded).
     - Writes the GlazeWM config (workspaces laid out for your monitors) and the menu,
@@ -43,6 +44,10 @@ param(
     # Windows VPN connection for the bar's VPN button (default: the first one found).
     # Pass -VpnName none to hide the button.
     [string]$VpnName,
+    # Install everything for your account only, with no admin prompt: GlazeWM and Zebar go to
+    # %LOCALAPPDATA%\Programs\glzr.io, the Nerd Font is installed for you only, and ImageMagick
+    # (which needs admin) is skipped.
+    [switch]$User,
     # Which version to download when run without a checkout (irm ... | iex): a release tag, or
     # 'main' for the latest, untested changes.
     [string]$Ref = 'v0.1.0'
@@ -84,10 +89,67 @@ function Quiet([scriptblock]$Block) {
 $glzr      = Join-Path $env:USERPROFILE '.glzr'
 $dest      = Join-Path $glzr 'winarchy'
 $configDir = Join-Path $glzr 'glazewm'
-$glazeExe  = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\glazewm.exe'
-$glazeCli  = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
-$zebarExe  = Join-Path $env:ProgramFiles 'glzr.io\Zebar\zebar.exe'
+$userApps  = Join-Path $env:LOCALAPPDATA 'Programs\glzr.io'   # GlazeWM and Zebar with -User
+# GlazeWM and Zebar: a per-user copy wins over Program Files (winarchy's helpers look the same way).
+function Find-Glzr($relative) {
+    $u = Join-Path $userApps $relative
+    if (Test-Path $u) { return $u }
+    return Join-Path $env:ProgramFiles "glzr.io\$relative"
+}
+function Resolve-GlzrPaths {
+    $script:glazeExe = Find-Glzr 'GlazeWM\glazewm.exe'
+    $script:glazeCli = Find-Glzr 'GlazeWM\cli\glazewm.exe'
+    $script:zebarExe = Find-Glzr 'Zebar\zebar.exe'
+}
+Resolve-GlzrPaths
 $stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
+
+# -User: unpack an app's official .msi into the user profile instead of installing it, which
+# needs no admin. Pinned version, checked by hash.
+function Install-UserMsi($name, $url, $sha256, $folder) {
+    $tmp = Join-Path $env:TEMP ('winarchy-msi-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path "$tmp\x" -Force | Out-Null
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest $url -OutFile "$tmp\app.msi" -UseBasicParsing
+        if ((Get-FileHash "$tmp\app.msi" -Algorithm SHA256).Hash -ne $sha256) { throw "$name download failed its checksum." }
+        # An administrative install (/a) only unpacks the files: no admin, nothing registered.
+        $p = Start-Process msiexec.exe -ArgumentList "/a `"$tmp\app.msi`" /qn TARGETDIR=`"$tmp\x`"" -Wait -PassThru
+        if ($p.ExitCode -ne 0) { throw "Unpacking $name failed (msiexec exit code $($p.ExitCode))." }
+        $src = Get-ChildItem "$tmp\x" -Directory -Recurse -Filter $folder | Where-Object { $_.Parent.Name -eq 'glzr.io' } | Select-Object -First 1
+        if (-not $src) { throw "Unpacking $name failed (no $folder folder in the package)." }
+        $target = Join-Path $userApps $folder
+        if (Test-Path $target) { Remove-Item $target -Recurse -Force }
+        New-Item -ItemType Directory -Path $userApps -Force | Out-Null
+        Copy-Item $src.FullName $target -Recurse
+    } finally { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+# -User: JetBrainsMono Nerd Font Mono for this account only (Windows 10 1809 and later allow
+# per-user fonts). Pinned version, checked by hash.
+function Install-UserFont {
+    $tmp = Join-Path $env:TEMP ('winarchy-font-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path "$tmp\x" -Force | Out-Null
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest 'https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/JetBrainsMono.tar.xz' -OutFile "$tmp\f.tar.xz" -UseBasicParsing
+        if ((Get-FileHash "$tmp\f.tar.xz" -Algorithm SHA256).Hash -ne '04D5E8F903693F9DD13E16F867E994834E681EB3C72C0D337A770DCDA09010CF') { throw 'Nerd Font download failed its checksum.' }
+        & "$env:WINDIR\System32\tar.exe" -xf "$tmp\f.tar.xz" -C "$tmp\x"
+        if ($LASTEXITCODE) { throw 'Unpacking the Nerd Font failed.' }
+        $fonts = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+        $reg = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+        New-Item -ItemType Directory -Path $fonts -Force | Out-Null
+        if (-not (Test-Path $reg)) { New-Item -Path $reg -Force | Out-Null }
+        Add-Type -Namespace WinarchyFont -Name Gdi -MemberDefinition '[DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern int AddFontResource(string file);'
+        foreach ($f in Get-ChildItem "$tmp\x" -Filter 'JetBrainsMonoNerdFontMono-*.ttf') {
+            $to = Join-Path $fonts $f.Name
+            Copy-Item $f.FullName $to -Force
+            $style = $f.BaseName.Substring('JetBrainsMonoNerdFontMono-'.Length)
+            Set-ItemProperty -Path $reg -Name "JetBrainsMono NFM $style (TrueType)" -Value $to
+            [void][WinarchyFont.Gdi]::AddFontResource($to)   # usable now, not only after sign-in
+        }
+    } finally { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+}
 
 if ([Environment]::OSVersion.Version.Build -lt 22000) {
     Write-Warning 'winarchy is built for Windows 11. Continuing, but some parts may not work.'
@@ -122,10 +184,26 @@ if (-not $SkipApps) {
     if (-not $NoDictation) {
         $apps += @{ Id = 'cjpais.Handy'; Name = 'Handy (dictation)'; Present = { Test-Path "$env:LOCALAPPDATA\Handy\handy.exe" } }
     }
+    # -User: the apps winget would install for every user (and so need admin) come from their
+    # official downloads into your profile instead, or are skipped.
+    $userInstall = @{
+        'glzr-io.glazewm' = { Install-UserMsi 'GlazeWM' 'https://github.com/glzr-io/glazewm/releases/download/v3.10.1/standalone-glazewm-v3.10.1-x64.msi' 'AD4122DD4420690E502E7DF3CE8D1E4772BF1246CC815DB0DD2AAAC0E4DC583F' 'GlazeWM' }
+        'glzr-io.zebar'   = { Install-UserMsi 'Zebar' 'https://github.com/glzr-io/zebar/releases/download/v3.3.1/zebar-v3.3.1-opt1-x64.msi' '1D5584BE8DEF58F828D55ED09CEE52FE80FDD60EA118141F37963AA80E902C28' 'Zebar' }
+        'DEVCOM.JetBrainsMonoNerdFont' = { Install-UserFont }
+    }
     foreach ($app in $apps) {
         if (& $app.Present) { Note "$($app.Name): already installed"; continue }
-        Note "$($app.Name): installing (approve the UAC prompt if one appears)"
-        Quiet { winget install --id $app.Id -e --accept-source-agreements --accept-package-agreements --disable-interactivity }
+        if ($User -and $app.Id -eq 'ImageMagick.ImageMagick') { Note "$($app.Name): skipped (its installer needs admin; image conversion won't work)"; continue }
+        if ($User -and $userInstall.ContainsKey($app.Id)) {
+            Note "$($app.Name): installing for your account only"
+            try { & $userInstall[$app.Id] } catch { Write-Warning "$($app.Name) did not install: $($_.Exception.Message)" }
+            Resolve-GlzrPaths
+            if (-not (& $app.Present)) { Write-Warning "$($app.Name) did not install cleanly." }
+            continue
+        }
+        $scope = @(); if ($User -and $app.Id -eq 'Microsoft.PowerToys') { $scope = @('--scope', 'user') }
+        Note $(if ($User) { "$($app.Name): installing" } else { "$($app.Name): installing (approve the UAC prompt if one appears)" })
+        Quiet { winget install --id $app.Id -e --accept-source-agreements --accept-package-agreements --disable-interactivity @scope }
         if (-not (& $app.Present)) { Write-Warning "$($app.Name) did not install cleanly (winget exit code $LASTEXITCODE)." }
     }
 
@@ -167,10 +245,10 @@ if (-not (Test-Path $csc)) { throw ".NET Framework C# compiler not found at $csc
 $common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
 & $csc @common "/out:$dest\winarchy.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
     /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Data.dll `
-    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs" "$here\src\safefile.cs"
+    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs" "$here\src\safefile.cs" "$here\src\glzr.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
 & $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll `
-    "$here\src\daemon.cs" "$here\src\safefile.cs"
+    "$here\src\daemon.cs" "$here\src\safefile.cs" "$here\src\glzr.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
 # Process stats for the bar and its process panel (a console program: Zebar reads its output).
 & $csc /nologo /codepage:65001 /optimize+ /target:exe "/out:$dest\winarchy-top.exe" "$here\src\top.cs" "$here\src\quiethours.cs"
@@ -271,7 +349,9 @@ if ($screens.Count -le 1) {
 }
 Note ("{0} monitor(s) found; primary is monitor {1}" -f $screens.Count, [math]::Max(0, [array]::IndexOf($screens, ($screens | Where-Object Primary | Select-Object -First 1))))
 $template = [IO.File]::ReadAllText("$here\config\glazewm.yaml")
-$config = $template.Replace('{{WORKSPACES}}', ($lines -join "`n"))
+# GlazeWM's shell-exec can't take a quoted path, so name Zebar through an environment variable.
+$zebarForGlaze = if ($zebarExe.StartsWith($userApps, [StringComparison]::OrdinalIgnoreCase)) { '%LOCALAPPDATA%/Programs/glzr.io/Zebar/zebar.exe' } else { '%ProgramFiles%/glzr.io/Zebar/zebar.exe' }
+$config = $template.Replace('{{WORKSPACES}}', ($lines -join "`n")).Replace('{{ZEBAR_EXE}}', $zebarForGlaze)
 Install-File "$here\config\glazewm.yaml" (Join-Path $configDir 'config.yaml') $config
 
 # --- 6. Zebar bar ------------------------------------------------------------------------

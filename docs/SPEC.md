@@ -206,7 +206,10 @@ From the Omarchy manual's Toggles, Top Bar, Reminders and Hotkeys chapters (Nove
 
 v0.1.0 is a GitHub pre-release until these are done:
 
-- [ ] **Clean-PC test.** Turn on Windows Sandbox (admin PowerShell: `Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All`, then restart). Run `.	ests\sandbox\start.ps1 -Ref v0.1.0` and read `tests\sandboxesultseport.txt`. Expect a fix or two on the first run, since the kit has never run.
+- [ ] **Clean-PC test.** Turn on Windows Sandbox (admin PowerShell: `Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All`, then restart). Run `.	ests\sandbox\start.ps1 -Ref v0.1.0` and read `tests\sandbox
+esults
+eport.txt`. Expect a fix or two on the first run, since the kit has never run.
+- [ ] **No-admin install.** Also run `.	ests\sandbox\start.ps1 -User`. The per-user pieces were tested on their own (MSI unpacking, the font, path lookup), but a whole `-User` install hasn't run yet. The sandbox account is an admin, so this checks the per-user layout, not the lack of rights; a real check needs a standard-user account.
 - [ ] **Real-key check of the drop-down.** Super+` (the key below Esc, matched by scan code) opens it and Super+W closes it. Keys injected from a script can't test the keyboard hook, so a person has to press them.
 - [ ] **Then:** if everything passes, mark v0.1.0 as a full release. Otherwise fix what failed and tag v0.1.1, bumping both the README install URL and the `-Ref` default in install.ps1.
 

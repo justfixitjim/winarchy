@@ -8,11 +8,12 @@
 
     .\tests\sandbox\start.ps1            test this checkout
     .\tests\sandbox\start.ps1 -Ref v0.1.0  test a published release the way users get it (irm | iex)
+    .\tests\sandbox\start.ps1 -User        test the no-admin install (install.ps1 -User)
 
     The sandbox window opens and runs everything by itself (10-20 minutes, most of it winget).
     The report lands in tests\sandbox\results\report.txt; close the sandbox when it says done.
 #>
-param([string]$Ref)
+param([string]$Ref, [switch]$User)
 $ErrorActionPreference = 'Stop'
 $sandbox = Join-Path $env:WINDIR 'System32\WindowsSandbox.exe'
 if (-not (Test-Path $sandbox)) {
@@ -24,6 +25,7 @@ New-Item -ItemType Directory -Force $results | Out-Null
 Get-ChildItem $results -File | Remove-Item -Force
 
 $refArg = if ($Ref) { " -Ref $Ref" } else { '' }
+if ($User) { $refArg += ' -User' }
 $wsb = Join-Path $results 'winarchy-test.wsb'
 @"
 <Configuration>

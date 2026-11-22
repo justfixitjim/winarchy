@@ -1,5 +1,5 @@
 {
-  "_help": "winarchy menu (Super+Space / Super+Alt+Space), laid out like Omarchy's. Each item has a label and ONE of: run (+args), glaze (GlazeWM command), terminal (PowerShell in Windows Terminal), page (an id, or 'keys'), items (a submenu) or provider ('apps' = every installed app, 'settings' = every Windows Settings page, 'themes' = the colour themes). Optional: hint, confirm, id. %ENV% vars are expanded; {dir} = the winarchy folder, {menu} = this file. Typing searches everything: apps, open windows, settings and every item below.",
+  "_help": "winarchy menu (Super+Space / Super+Alt+Space), laid out like Omarchy's. Each item has a label and ONE of: run (+args), glaze (GlazeWM command), terminal (PowerShell in Windows Terminal), page (an id, or 'keys'), items (a submenu) or provider ('apps' = every installed app, 'settings' = every Windows Settings page, 'themes' = the colour themes). Optional: hint, confirm, id. %ENV% vars are expanded; {dir} = the winarchy folder, {menu} = this file, {glazewm} / {glazewm-cli} / {zebar} = those programs. Typing searches everything: apps, open windows, settings and every item below.",
   "root": {
     "label": "winarchy",
     "items": [
@@ -161,7 +161,7 @@
                 "label": "Show / hide bar",
                 "hint": "Zebar",
                 "run": "powershell.exe",
-                "args": "-NoProfile -WindowStyle Hidden -Command \"if (Get-Process zebar -ErrorAction SilentlyContinue) { Stop-Process -Name zebar } else { Start-Process \\\"$env:ProgramFiles\\glzr.io\\Zebar\\zebar.exe\\\" }\""
+                "args": "-NoProfile -WindowStyle Hidden -Command \"if (Get-Process zebar -ErrorAction SilentlyContinue) { Stop-Process -Name zebar } else { Start-Process \\\"{zebar}\\\" }\""
               },
               {
                 "label": "Show / hide Windows taskbar",
@@ -749,7 +749,7 @@
               {
                 "label": "Restart GlazeWM",
                 "run": "cmd.exe",
-                "args": "/c \"\"%ProgramFiles%\\glzr.io\\GlazeWM\\cli\\glazewm.exe\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"%ProgramFiles%\\glzr.io\\GlazeWM\\glazewm.exe\"\""
+                "args": "/c \"\"{glazewm-cli}\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"{glazewm}\"\""
               },
               {
                 "label": "Reload GlazeWM config",
@@ -764,7 +764,7 @@
                 "label": "Restart bar",
                 "hint": "Zebar",
                 "run": "powershell.exe",
-                "args": "-NoProfile -WindowStyle Hidden -Command \"Stop-Process -Name zebar -ErrorAction SilentlyContinue; Start-Sleep 1; Start-Process \\\"$env:ProgramFiles\\glzr.io\\Zebar\\zebar.exe\\\"\""
+                "args": "-NoProfile -WindowStyle Hidden -Command \"Stop-Process -Name zebar -ErrorAction SilentlyContinue; Start-Sleep 3; Start-Process \\\"{zebar}\\\"\""
               },
               {
                 "label": "Restart dictation",

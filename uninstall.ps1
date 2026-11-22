@@ -13,7 +13,7 @@
 #>
 [CmdletBinding()]
 param(
-    # Also uninstall GlazeWM and Zebar with winget (PowerToys is left alone).
+    # Also uninstall GlazeWM and Zebar (PowerToys is left alone).
     [switch]$RemoveApps
 )
 
@@ -22,7 +22,9 @@ function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 
 $dest      = Join-Path $env:USERPROFILE '.glzr\winarchy'
 $config    = Join-Path $env:USERPROFILE '.glzr\glazewm\config.yaml'
-$glazeCli  = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe'
+$userApps  = Join-Path $env:LOCALAPPDATA 'Programs\glzr.io'   # install.ps1 -User puts GlazeWM and Zebar here
+$glazeCli  = Join-Path $userApps 'GlazeWM\cli\glazewm.exe'
+if (-not (Test-Path $glazeCli)) { $glazeCli = Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\cli\glazewm.exe' }
 $daemon    = Join-Path $dest 'winarchy-daemon.exe'
 
 Step 'Stopping GlazeWM and winarchy'
@@ -102,8 +104,14 @@ if (Test-Path $cache) { Remove-Item $cache -Recurse -Force }
 
 if ($RemoveApps) {
     Step 'Uninstalling GlazeWM and Zebar'
-    winget uninstall --id glzr-io.glazewm -e --disable-interactivity
-    winget uninstall --id glzr-io.zebar -e --disable-interactivity
+    if (Test-Path $userApps) {
+        Get-Process glazewm, zebar -ErrorAction SilentlyContinue | Stop-Process -Force
+        Start-Sleep -Seconds 1
+        Remove-Item $userApps -Recurse -Force
+        Write-Host "    removed $userApps"
+    }
+    if (Test-Path (Join-Path $env:ProgramFiles 'glzr.io\GlazeWM\glazewm.exe')) { winget uninstall --id glzr-io.glazewm -e --disable-interactivity }
+    if (Test-Path (Join-Path $env:ProgramFiles 'glzr.io\Zebar\zebar.exe')) { winget uninstall --id glzr-io.zebar -e --disable-interactivity }
 }
 
 Write-Host 'winarchy removed.' -ForegroundColor Green

@@ -3,7 +3,7 @@
     uninstall it, check again. Writes C:\results\report.txt (tests\sandbox\results on the host).
     Keep this file ASCII-only.
 #>
-param([string]$Ref)
+param([string]$Ref, [switch]$User)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -27,7 +27,7 @@ Add-Type -Namespace T -Name W -MemberDefinition @'
 function Taskbar-Visible { [T.W]::IsWindowVisible([T.W]::FindWindow('Shell_TrayWnd', $null)) }
 function Running($name) { [bool](Get-Process $name -ErrorAction SilentlyContinue) }
 
-Log "winarchy sandbox test ($(if ($Ref) { "release $Ref via irm | iex" } else { 'local checkout' }))"
+Log "winarchy sandbox test ($(if ($Ref) { "release $Ref via irm | iex" } else { 'local checkout' })$(if ($User) { ', -User' }))"
 Log ("Windows " + (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion + ", build " + [Environment]::OSVersion.Version.Build)
 
 # --- 1. winget (Windows Sandbox doesn't have it) ---------------------------------------------
@@ -52,14 +52,15 @@ Check 'winget available' { Get-Command winget -ErrorAction SilentlyContinue }
 # --- 2. Install ----------------------------------------------------------------------------------
 $taskbarBefore = Taskbar-Visible
 Log 'Running the installer (this takes a while)...'
+$userArg = @(); if ($User) { $userArg = @('-User') }
 $installLog = 'C:\results\install.log'
 if ($Ref) {
     $src = Invoke-RestMethod "https://raw.githubusercontent.com/justfixitjim/winarchy/$Ref/install.ps1"
     $tmp = Join-Path $env:TEMP 'winarchy-install.ps1'; Set-Content $tmp $src -Encoding UTF8
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp -Ref $Ref *>&1 | Tee-Object -FilePath $installLog | Out-Host
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp -Ref $Ref @userArg *>&1 | Tee-Object -FilePath $installLog | Out-Host
 } else {
     Copy-Item C:\winarchy-src C:\winarchy -Recurse -Force
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\winarchy\install.ps1 *>&1 | Tee-Object -FilePath $installLog | Out-Host
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\winarchy\install.ps1 @userArg *>&1 | Tee-Object -FilePath $installLog | Out-Host
 }
 Check 'installer finished without an error' { $LASTEXITCODE -eq 0 -and -not (Select-String $installLog -Pattern 'Exception|failed' -Quiet) }
 
@@ -75,8 +76,11 @@ Check 'bar loaded (web server up and winarchy-top started by the bar)' {
 }
 Check 'taskbar hidden' { Wait-For { -not (Taskbar-Visible) } 30 }
 Check 'starts at sign-in' { Test-Path (Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk') }
+$userApps = Join-Path $env:LOCALAPPDATA 'Programs\glzr.io'
+if ($User) { Check 'GlazeWM and Zebar installed in the user profile' { (Test-Path "$userApps\GlazeWM\glazewm.exe") -and (Test-Path "$userApps\Zebar\zebar.exe") } }
+$glazeCli = if (Test-Path "$userApps\GlazeWM\cli\glazewm.exe") { "$userApps\GlazeWM\cli\glazewm.exe" } else { "$env:ProgramFiles\glzr.io\GlazeWM\cli\glazewm.exe" }
 Check 'GlazeWM sees a workspace' {
-    $q = & "$env:ProgramFiles\glzr.io\GlazeWM\cli\glazewm.exe" query workspaces | ConvertFrom-Json
+    $q = & $glazeCli query workspaces | ConvertFrom-Json
     @($q.data.workspaces).Count -ge 1
 }
 Check 'reminder pops up' {

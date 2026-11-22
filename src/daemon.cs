@@ -568,7 +568,7 @@ static class Autotile
 // have settled, this moves each workspace back to its own monitor, then puts focus back.
 static class WorkspaceTidy
 {
-    static readonly string Cli = Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\GlazeWM\cli\glazewm.exe");
+    static readonly string Cli = Glzr.GlazeCli;
     static readonly string Config = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\.glzr\glazewm\config.yaml");
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
     static readonly object gate = new object();
@@ -991,7 +991,7 @@ static class BarWatchdog
     static System.Threading.Timer timer;
     static int busy;
     static readonly List<DateTime> restarts = new List<DateTime>();
-    static readonly string ZebarExe = Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\Zebar\zebar.exe");
+    static readonly string ZebarExe = Glzr.ZebarExe;
 
     public static void Start()
     {

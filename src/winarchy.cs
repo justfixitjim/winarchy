@@ -474,7 +474,7 @@ static class Program
         try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winarchy-trace.log"), string.Format("{0,7:0} ms  {1}\r\n", ms, what)); } catch { }
     }
 
-    static string GlazeCli { get { return Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\GlazeWM\cli\glazewm.exe"); } }
+    static string GlazeCli { get { return Glzr.GlazeCli; } }
 
     [STAThread]
     static void Main(string[] args)
@@ -990,7 +990,8 @@ static class Program
 
     static string Expand(string v)
     {
-        return Environment.ExpandEnvironmentVariables(v.Replace("{menu}", Path.Combine(Dir, "menu.json")).Replace("{dir}", Dir));
+        return Environment.ExpandEnvironmentVariables(v.Replace("{menu}", Path.Combine(Dir, "menu.json")).Replace("{dir}", Dir)
+            .Replace("{glazewm}", Glzr.GlazeExe).Replace("{glazewm-cli}", Glzr.GlazeCli).Replace("{zebar}", Glzr.ZebarExe));
     }
 
     // ── menu.json ───────────────────────────────────────────────────────

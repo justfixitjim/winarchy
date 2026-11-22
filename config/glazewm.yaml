@@ -17,7 +17,7 @@
 
 general:
   startup_commands:
-    - 'shell-exec %ProgramFiles%/glzr.io/Zebar/zebar.exe'
+    - 'shell-exec {{ZEBAR_EXE}}'
     - 'shell-exec %USERPROFILE%/.glzr/winarchy/winarchy-daemon.exe'
     - 'shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe --resident'
   shutdown_commands:

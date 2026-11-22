@@ -15,8 +15,8 @@ using System.Windows.Forms;
 
 static class Toggles
 {
-    static string GlazeCli { get { return Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\GlazeWM\cli\glazewm.exe"); } }
-    static string ZebarExe { get { return Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\Zebar\zebar.exe"); } }
+    static string GlazeCli { get { return Glzr.GlazeCli; } }
+    static string ZebarExe { get { return Glzr.ZebarExe; } }
 
     public static void Run(string what, string dir)
     {
