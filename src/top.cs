@@ -205,10 +205,16 @@ static class Top
         catch (IOException) { return 0; } // the reader went away
     }
 
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr handle, uint ms);
+
     static int Summary(int interval, StreamWriter stdout)
     {
         long idle;
         RememberParent(Snapshot(out idle));
+        // Watch the parent (Zebar) through a handle: a 5-second check that costs nothing, where
+        // a full process snapshot lists every process on the PC.
+        IntPtr parent = parentPid > 0 ? OpenProcess(0x00100000 /* SYNCHRONIZE */, false, parentPid) : IntPtr.Zero;
         string dir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
         while (true)
         {
@@ -226,7 +232,7 @@ static class Top
             sb.Append('}');
             stdout.WriteLine(sb.ToString());
             Thread.Sleep(interval);
-            if (parentPid > 0 && !ParentAlive(Snapshot(out idle))) return 0;
+            if (parent != IntPtr.Zero ? WaitForSingleObject(parent, 0) == 0 : parentPid > 0 && !ParentAlive(Snapshot(out idle))) return 0;
         }
     }
 

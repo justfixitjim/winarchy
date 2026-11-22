@@ -794,7 +794,7 @@ static class Program
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(HistoryPath));
-            File.WriteAllText(HistoryPath, new JavaScriptSerializer().Serialize(History), Encoding.UTF8);
+            SafeFile.Write(HistoryPath, new JavaScriptSerializer().Serialize(History));
         }
         catch { }
     }
@@ -1272,7 +1272,7 @@ static class Launcher
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(CachePath));
-            File.WriteAllText(CachePath, new JavaScriptSerializer().Serialize(map), Encoding.UTF8);
+            SafeFile.Write(CachePath, new JavaScriptSerializer().Serialize(map));
         }
         catch { }
     }

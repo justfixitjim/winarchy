@@ -54,12 +54,18 @@
         const [summary, setSummary] = useState(null);
         useEffect(() => {
           let proc = null, stopped = false, retry = null;
+          // Started again if it exits or can't start (the installer replaces it while the bar runs).
           async function start() {
+            if (stopped) return;
             try {
               proc = await zebar.shellSpawn(TOP, ['summary', '5000']);
+              if (stopped) { proc.kill(); return; }
               proc.onStdout(line => { try { setSummary(JSON.parse(line)); } catch {} });
               proc.onExit(() => { if (!stopped) retry = setTimeout(start, 15000); });
-            } catch (err) { console.error(err); }
+            } catch (err) {
+              console.error(err);
+              retry = setTimeout(start, 15000);
+            }
           }
           start();
           return () => { stopped = true; clearTimeout(retry); try { proc?.kill(); } catch {} };
@@ -234,13 +240,17 @@
       function Bluetooth() {
         const [info, setInfo] = useState(null);
         const cache = BLUETOOTH.replace(/tools\\bluetooth\.ps1$/i, 'bluetooth.json');
+        const busy = React.useRef(false);
         async function refresh(run) {
+          if (run && busy.current) return;   // never two PowerShells at once if one is slow
+          if (run) busy.current = true;
           try {
             const text = run
               ? (await zebar.shellExec('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', BLUETOOTH, 'info'])).stdout.trim()
               : (await zebar.shellExec('cmd.exe', ['/c', 'type', cache]).catch(() => ({ stdout: '' }))).stdout.trim();
             if (text) setInfo(JSON.parse(text));
           } catch (err) { console.error(err); }
+          finally { if (run) busy.current = false; }
         }
         useEffect(() => {
           refresh(false).then(() => refresh(true));
@@ -363,7 +373,10 @@
 
         // Read the script's cache directly (cheap); start PowerShell only when it's a few minutes old.
         const cache = AGENTS.replace(/tools\\agents\.ps1$/i, 'agents\\usage.json');
+        const busy = React.useRef(false);
         async function refresh() {
+          if (busy.current) return;   // the last check (it can take a while) is still running
+          busy.current = true;
           try {
             let text = (await zebar.shellExec('cmd.exe', ['/c', 'type', cache]).catch(() => ({ stdout: '' }))).stdout.trim();
             const updated = text ? JSON.parse(text).updated : null;
@@ -373,6 +386,8 @@
             if (text) setData(JSON.parse(text));
           } catch (err) {
             console.error(err);
+          } finally {
+            busy.current = false;
           }
         }
 

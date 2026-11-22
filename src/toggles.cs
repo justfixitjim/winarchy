@@ -65,15 +65,28 @@ static class Toggles
         new[] { "qwen", "Qwen Code" },
     };
 
+    // File names in every PATH folder, listed once and reused for 30 seconds. Checking each
+    // agent × folder × extension one file at a time took about half a second, on every menu open.
+    static HashSet<string> pathFiles;
+    static DateTime pathFilesAt;
+
     public static bool Installed(string command)
     {
-        string exts = Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT";
-        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'))
+        if (pathFiles == null || DateTime.UtcNow - pathFilesAt > TimeSpan.FromSeconds(30))
         {
-            if (dir.Trim().Length == 0) continue;
-            foreach (string ext in exts.Split(';'))
-                try { if (File.Exists(Path.Combine(dir.Trim(), command + ext))) return true; } catch { }
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'))
+            {
+                if (dir.Trim().Length == 0) continue;
+                try { foreach (string f in Directory.EnumerateFiles(Environment.ExpandEnvironmentVariables(dir.Trim()))) files.Add(Path.GetFileName(f)); }
+                catch { }
+            }
+            pathFiles = files;
+            pathFilesAt = DateTime.UtcNow;
         }
+        string exts = Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT";
+        foreach (string ext in exts.Split(';'))
+            if (ext.Length > 0 && pathFiles.Contains(command + ext)) return true;
         return false;
     }
 
@@ -107,15 +120,19 @@ static class Toggles
                 return;
             }
             // Merge into settings.json, which winarchy-daemon and theme.ps1 also use.
-            var json = new JavaScriptSerializer();
-            Dictionary<string, object> s = null;
-            try { s = json.DeserializeObject(File.ReadAllText(SettingsPath(dir), Encoding.UTF8)) as Dictionary<string, object>; } catch { }
-            if (s == null) s = new Dictionary<string, object>();
-            s["defaultAgent"] = name;
-            var sb = new StringBuilder("{\n");
-            int i = 0;
-            foreach (var kv in s) sb.Append("  \"" + kv.Key + "\": " + json.Serialize(kv.Value) + (++i < s.Count ? ",\n" : "\n"));
-            File.WriteAllText(SettingsPath(dir), sb.Append("}\n").ToString(), new UTF8Encoding(false));
+            string path = SettingsPath(dir);
+            SafeFile.Locked(path, delegate
+            {
+                var json = new JavaScriptSerializer();
+                Dictionary<string, object> s = null;
+                try { s = json.DeserializeObject(SafeFile.Read(path) ?? "") as Dictionary<string, object>; } catch { }
+                if (s == null) s = new Dictionary<string, object>();
+                s["defaultAgent"] = name;
+                var sb = new StringBuilder("{\n");
+                int i = 0;
+                foreach (var kv in s) sb.Append("  " + json.Serialize(kv.Key) + ": " + json.Serialize(kv.Value) + (++i < s.Count ? ",\n" : "\n"));
+                SafeFile.Write(path, sb.Append("}\n").ToString());
+            });
             return;
         }
         string command = DefaultAgent(dir);
@@ -190,18 +207,30 @@ static class Toggles
     // reminders.json: [{ "id": 1, "due": <unix ms>, "text": "..." }], fired by winarchy-daemon.
     public static void Remind(string[] args, string dir)
     {
+        string verb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
+        double minutes = 0;
+        bool add = verb == "add" && args.Length > 2 && double.TryParse(args[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out minutes) && minutes > 0;
+        if (!add && !(verb == "remove" && args.Length > 2) && verb != "clear")
+        {
+            MessageBox.Show("winarchy remind add <minutes> <text>\nwinarchy remind remove <id>\nwinarchy remind clear", "winarchy");
+            return;
+        }
+        // winarchy-daemon also rewrites this file (it drops reminders once they've popped up).
         string path = Path.Combine(dir, "reminders.json");
+        SafeFile.Locked(path, delegate { ChangeReminders(path, verb, add, minutes, args); });
+    }
+
+    static void ChangeReminders(string path, string verb, bool add, double minutes, string[] args)
+    {
         var json = new JavaScriptSerializer();
         var list = new List<Dictionary<string, object>>();
         try
         {
-            var arr = json.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as object[];
+            var arr = json.DeserializeObject(SafeFile.Read(path) ?? "[]") as object[];
             if (arr != null) list = arr.OfType<Dictionary<string, object>>().ToList();
         }
         catch { }
-        string verb = args.Length > 1 ? args[1].ToLowerInvariant() : "";
-        double minutes;
-        if (verb == "add" && args.Length > 2 && double.TryParse(args[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out minutes) && minutes > 0)
+        if (add)
         {
             string text = args.Length > 3 ? string.Join(" ", args, 3, args.Length - 3).Trim() : "";
             long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds;
@@ -212,12 +241,8 @@ static class Toggles
             list.RemoveAll(r => Convert.ToString(r.ContainsKey("id") ? r["id"] : "") == args[2]);
         else if (verb == "clear")
             list.Clear();
-        else
-        {
-            MessageBox.Show("winarchy remind add <minutes> <text>\nwinarchy remind remove <id>\nwinarchy remind clear", "winarchy");
-            return;
-        }
-        list.Sort((a, b) => Convert.ToInt64(a["due"]).CompareTo(Convert.ToInt64(b["due"])));
-        File.WriteAllText(path, json.Serialize(list), new UTF8Encoding(false));
+        Func<Dictionary<string, object>, long> due = r => { try { return Convert.ToInt64(r["due"]); } catch { return 0; } };
+        list.Sort((a, b) => due(a).CompareTo(due(b)));
+        SafeFile.Write(path, json.Serialize(list));
     }
 }

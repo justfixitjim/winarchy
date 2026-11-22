@@ -16,10 +16,18 @@ static class QuietHours
     const string Off = "Microsoft.QuietHoursProfile.Unrestricted";
     const string On = "Microsoft.QuietHoursProfile.PriorityOnly";
 
+    // Made once and reused (the bar asks every 5 seconds); made again after any failure, in case
+    // the service behind it restarted.
+    static IQuietHoursSettings cached;
+
     static IQuietHoursSettings Settings()
     {
-        var type = Type.GetTypeFromCLSID(new Guid("f53321fa-34f8-4b7f-b9a3-361877cb94cf")); // CLSID_QuietHoursSettings
-        return (IQuietHoursSettings)Activator.CreateInstance(type);
+        if (cached == null)
+        {
+            var type = Type.GetTypeFromCLSID(new Guid("f53321fa-34f8-4b7f-b9a3-361877cb94cf")); // CLSID_QuietHoursSettings
+            cached = (IQuietHoursSettings)Activator.CreateInstance(type);
+        }
+        return cached;
     }
 
     // null when Windows doesn't offer it.
@@ -28,15 +36,20 @@ static class QuietHours
         try
         {
             string id;
-            if (Settings().get_UserSelectedProfile(out id) != 0 || id == null) return null;
+            if (Settings().get_UserSelectedProfile(out id) != 0 || id == null) { cached = null; return null; }
             return id != Off;
         }
-        catch { return null; }
+        catch { cached = null; return null; }
     }
 
     public static bool Set(bool on)
     {
-        try { return Settings().put_UserSelectedProfile(on ? On : Off) == 0; }
-        catch { return false; }
+        try
+        {
+            if (Settings().put_UserSelectedProfile(on ? On : Off) == 0) return true;
+            cached = null;
+            return false;
+        }
+        catch { cached = null; return false; }
     }
 }

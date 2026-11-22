@@ -159,9 +159,10 @@ if (-not (Test-Path $csc)) { throw ".NET Framework C# compiler not found at $csc
 $common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
 & $csc @common "/out:$dest\winarchy.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
     /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Data.dll `
-    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs"
+    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs" "$here\src\safefile.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
-& $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "$here\src\daemon.cs"
+& $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll `
+    "$here\src\daemon.cs" "$here\src\safefile.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy-daemon.exe failed.' }
 # Process stats for the bar and its process panel (a console program: Zebar reads its output).
 & $csc /nologo /codepage:65001 /optimize+ /target:exe "/out:$dest\winarchy-top.exe" "$here\src\top.cs" "$here\src\quiethours.cs"

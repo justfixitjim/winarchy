@@ -80,22 +80,8 @@ static class Daemon
             var nightTimer = new System.Windows.Forms.Timer { Interval = 5000 };
             nightTimer.Tick += delegate { NightLight.Reapply(); }; // displays reset their colours on sleep / reconnect
             nightTimer.Start();
-            OnEvent(@"Local\winarchy-daemon-awake", delegate
-            {
-                settings = LoadSettings(); // others (winarchy.exe, theme.ps1) write this file too
-                bool on = !Flag("stayAwake", false);
-                settings["stayAwake"] = on;
-                SaveSettings();
-                Awake.Set(on);
-            });
-            OnEvent(@"Local\winarchy-daemon-nightlight", delegate
-            {
-                settings = LoadSettings();
-                bool on = !Flag("nightLight", false);
-                settings["nightLight"] = on;
-                SaveSettings();
-                NightLight.Set(on);
-            });
+            OnEvent(@"Local\winarchy-daemon-awake", delegate { Awake.Set(ToggleSetting("stayAwake", false)); });
+            OnEvent(@"Local\winarchy-daemon-nightlight", delegate { NightLight.Set(ToggleSetting("nightLight", false)); });
 
             Reminders.Start(Dir);
             if (Flag("barWatchdog", true)) BarWatchdog.Start();
@@ -115,11 +101,7 @@ static class Daemon
             });
             OnEvent(@"Local\winarchy-daemon-taskbar", delegate
             {
-                settings = LoadSettings();
-                bool hide = !Flag("hideTaskbar", true);
-                settings["hideTaskbar"] = hide;
-                SaveSettings();
-                if (hide) Taskbar.Hide(OriginalAutoHidePath); else Taskbar.Restore(OriginalAutoHidePath);
+                if (ToggleSetting("hideTaskbar", true)) Taskbar.Hide(OriginalAutoHidePath); else Taskbar.Restore(OriginalAutoHidePath);
             });
 
             if (Flag("autotile", true))
@@ -163,28 +145,37 @@ static class Daemon
     {
         try
         {
-            var d = Json.DeserializeObject(File.ReadAllText(SettingsPath, Encoding.UTF8)) as Dictionary<string, object>;
+            var d = Json.DeserializeObject(SafeFile.Read(SettingsPath) ?? "") as Dictionary<string, object>;
             if (d != null) return d;
         }
         catch { }
         return new Dictionary<string, object>();
     }
 
-    static void SaveSettings()
+    // Flips a true/false setting and returns its new value. Others (winarchy.exe, the installer)
+    // write settings.json too, so it's re-read and saved under the shared file lock.
+    static bool ToggleSetting(string key, bool fallback)
     {
+        bool on = !fallback;
         try
         {
-            var sb = new StringBuilder("{\n");
-            int i = 0;
-            foreach (var kv in settings)
+            SafeFile.Locked(SettingsPath, delegate
             {
-                sb.Append("  \"" + kv.Key + "\": " + Json.Serialize(kv.Value));
-                sb.Append(++i < settings.Count ? ",\n" : "\n");
-            }
-            sb.Append("}\n");
-            File.WriteAllText(SettingsPath, sb.ToString(), new UTF8Encoding(false));
+                settings = LoadSettings();
+                on = !Flag(key, fallback);
+                settings[key] = on;
+                var sb = new StringBuilder("{\n");
+                int i = 0;
+                foreach (var kv in settings)
+                {
+                    sb.Append("  " + Json.Serialize(kv.Key) + ": " + Json.Serialize(kv.Value));
+                    sb.Append(++i < settings.Count ? ",\n" : "\n");
+                }
+                SafeFile.Write(SettingsPath, sb.Append("}\n").ToString());
+            });
         }
         catch { }
+        return on;
     }
 }
 
@@ -209,7 +200,9 @@ static class SuperKey
     static readonly HookProc Proc = Callback; // kept alive for the GC
     static IntPtr hook;
     static bool superDown;
-    static Control Target;
+    static Control Target;   // the main UI thread (drop-down terminal)
+    static Control hookUi;   // the hook's own thread (mask key)
+    static Thread thread;
 
     static void SendMask()
     {
@@ -217,10 +210,25 @@ static class SuperKey
         keybd_event(VK_MASK, 0, 2, UIntPtr.Zero);
     }
 
+    // The hook runs on a thread that does nothing else. Windows quietly removes a low-level hook
+    // whose thread is too slow to answer, and the main thread talks to Explorer, sets gamma ramps
+    // and reads files: one stall there (Explorer hanging, say) would bring Start back on Super.
     public static void Install(Control uiThread)
     {
         Target = uiThread;
-        if (hook == IntPtr.Zero) hook = SetWindowsHookEx(WH_KEYBOARD_LL, Proc, GetModuleHandle(null), 0);
+        if (thread != null) return;
+        var ready = new ManualResetEvent(false);
+        thread = new Thread(() =>
+        {
+            hookUi = new Control();
+            hookUi.CreateControl();
+            IntPtr force = hookUi.Handle;
+            hook = SetWindowsHookEx(WH_KEYBOARD_LL, Proc, GetModuleHandle(null), 0);
+            ready.Set();
+            Application.Run();
+        }) { IsBackground = true, Name = "keyboard hook" };
+        thread.Start();
+        ready.WaitOne(3000);
     }
 
     public static void Remove()
@@ -247,7 +255,7 @@ static class SuperKey
                     // Inject after this callback returns, so Windows sees Super down
                     // first and the mask key second. Injecting from inside the
                     // callback lands too early and does nothing.
-                    if (BlockStart && Target != null) Target.BeginInvoke((MethodInvoker)SendMask);
+                    if (BlockStart && hookUi != null) hookUi.BeginInvoke((MethodInvoker)SendMask);
                 }
                 else if (!down) superDown = false;
             }
@@ -392,21 +400,33 @@ static class Taskbar
         }
     }
 
+    // Called every second. Asking Explorer for the auto-hide state is a round trip to its process,
+    // so that happens when the taskbar is new (Explorer restarted) and every 30 seconds after.
+    static IntPtr lastTray;
+    static int sinceCheck;
+
     public static void Hide(string originalPath)
     {
-        if (FindWindow("Shell_TrayWnd", null) == IntPtr.Zero) return; // Explorer not up yet
-        if (!AutoHide)
+        IntPtr tray = FindWindow("Shell_TrayWnd", null);
+        if (tray == IntPtr.Zero) return; // Explorer not up yet
+        if (tray != lastTray || ++sinceCheck >= 30)
         {
-            if (!File.Exists(originalPath)) File.WriteAllText(originalPath, "0");
-            AutoHide = true;
+            if (!AutoHide)
+            {
+                if (!File.Exists(originalPath)) File.WriteAllText(originalPath, "0");
+                AutoHide = true;
+            }
+            else if (!File.Exists(originalPath)) File.WriteAllText(originalPath, "1");
+            lastTray = tray;
+            sinceCheck = 0;
         }
-        else if (!File.Exists(originalPath)) File.WriteAllText(originalPath, "1");
         foreach (var h in Windows())
             if (IsWindowVisible(h)) ShowWindow(h, 0); // SW_HIDE
     }
 
     public static void Restore(string originalPath)
     {
+        lastTray = IntPtr.Zero;
         foreach (var h in Windows()) ShowWindow(h, 8); // SW_SHOWNA
         if (File.Exists(originalPath))
         {
@@ -449,7 +469,8 @@ static class Autotile
                     ms.Write(buf, 0, r.Count);
                 } while (!r.EndOfMessage);
 
-                string dir = Decide(Encoding.UTF8.GetString(ms.ToArray()));
+                string dir = null;
+                try { dir = Decide(Encoding.UTF8.GetString(ms.ToArray())); } catch { } // an odd message shouldn't drop the connection
                 if (dir != null) await Send(ws, "command set-tiling-direction " + dir);
             }
         }
@@ -605,28 +626,38 @@ static class Reminders
         timer.Start();
     }
 
+    // The file is only read again when it changes or the next reminder is due.
+    static DateTime lastStamp;
+    static long nextDue = long.MaxValue;
+
     static void Check()
     {
         try
         {
             if (!File.Exists(path)) return;
-            var stamp = File.GetLastWriteTimeUtc(path);
-            var list = Json.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as object[];
-            if (list == null || list.Length == 0) return;
             long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds;
-            var keep = new List<object>();
+            if (File.GetLastWriteTimeUtc(path) == lastStamp && now < nextDue) return;
             var due = new List<string>();
-            foreach (var o in list)
+            // `winarchy remind` writes this file too; the shared lock keeps a reminder added just
+            // now from being lost when the fired ones are taken out.
+            SafeFile.Locked(path, delegate
             {
-                var r = o as Dictionary<string, object>;
-                if (r == null) continue;
-                long when = Convert.ToInt64(r.ContainsKey("due") ? r["due"] : 0);
-                if (when <= now) due.Add(r.ContainsKey("text") ? Convert.ToString(r["text"]) : "Reminder");
-                else keep.Add(r);
-            }
-            if (due.Count == 0) return;
-            if (File.GetLastWriteTimeUtc(path) != stamp) return; // changed while reading; next tick
-            File.WriteAllText(path, Json.Serialize(keep), new UTF8Encoding(false));
+                var list = Json.DeserializeObject(SafeFile.Read(path) ?? "[]") as object[] ?? new object[0];
+                var keep = new List<object>();
+                long next = long.MaxValue;
+                foreach (var o in list)
+                {
+                    var r = o as Dictionary<string, object>;
+                    if (r == null) continue;
+                    long when = 0;
+                    try { when = Convert.ToInt64(r.ContainsKey("due") ? r["due"] : 0); } catch { }
+                    if (when <= now) due.Add(r.ContainsKey("text") ? Convert.ToString(r["text"]) : "Reminder");
+                    else { keep.Add(r); next = Math.Min(next, when); }
+                }
+                if (due.Count > 0) SafeFile.Write(path, Json.Serialize(keep));
+                nextDue = next;
+                lastStamp = File.GetLastWriteTimeUtc(path);
+            });
             foreach (string text in due) Show(text);
         }
         catch { }
@@ -717,10 +748,12 @@ static class BarWatchdog
     static void Check(object state)
     {
         if (Interlocked.Exchange(ref busy, 1) == 1) return;
+        System.Diagnostics.Process[] zebar = null;
         try
         {
-            var zebar = System.Diagnostics.Process.GetProcessesByName("zebar");
-            if (zebar.Length == 0 || Listening()) return;
+            if (Listening()) return; // the usual case, and cheaper to ask than listing processes
+            zebar = System.Diagnostics.Process.GetProcessesByName("zebar");
+            if (zebar.Length == 0) return;
             // Give a freshly started Zebar time to open its server.
             foreach (var p in zebar)
                 try { if (DateTime.Now - p.StartTime < TimeSpan.FromSeconds(15)) return; } catch { }
@@ -732,10 +765,16 @@ static class BarWatchdog
             foreach (var p in zebar) { try { p.Kill(); } catch { } }
             foreach (var p in zebar) { try { p.WaitForExit(5000); } catch { } }
             Thread.Sleep(4000); // its WebView2 processes and port must be gone first
-            if (System.Diagnostics.Process.GetProcessesByName("zebar").Length == 0)
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ZebarExe) { UseShellExecute = true });
+            var again = System.Diagnostics.Process.GetProcessesByName("zebar");
+            foreach (var p in again) p.Dispose();
+            if (again.Length == 0)
+                using (System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ZebarExe) { UseShellExecute = true })) { }
         }
         catch { }
-        finally { Interlocked.Exchange(ref busy, 0); }
+        finally
+        {
+            if (zebar != null) foreach (var p in zebar) p.Dispose();
+            Interlocked.Exchange(ref busy, 0);
+        }
     }
 }
