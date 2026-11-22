@@ -171,6 +171,9 @@ keybindings:
   # Theme picker (colours for borders, bar, menu, Windows, Terminal, VS Code)
   - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe theme']
     bindings: ['lwin+ctrl+shift+space']
+  # Background picker (the theme's wallpapers, with previews)
+  - commands: ['shell-exec %USERPROFILE%/.glzr/winarchy/winarchy.exe backgrounds']
+    bindings: ['lwin+ctrl+alt+space']
   # Screen recording: start / stop (this monitor)
   - commands: ['shell-exec --hide-window powershell -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File %USERPROFILE%/.glzr/winarchy/tools/record.ps1']
     bindings: ['lwin+alt+r']

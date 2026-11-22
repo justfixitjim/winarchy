@@ -87,6 +87,7 @@ It never touches your Claude Code or Codex sign-ins unless you turn on [account 
 | Super+K | Every keybinding, searchable |
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
 | Super+Ctrl+Shift+Space | Pick a colour theme |
+| Super+Ctrl+Alt+Space | Pick a background (the theme's wallpapers, with previews) |
 | Super+Alt+R | Start / stop screen recording |
 | Super+` (the key below Esc, on any layout) | Drop-down terminal: show / hide; Super+W closes it |
 | Super+Ctrl+I | Stay awake (no sleep or screen-off) on / off |
@@ -229,7 +230,7 @@ Super+Ctrl+Shift+Space (or menu → Appearance → Theme) switches every colour 
 A theme changes:
 - **GlazeWM** window borders, the **top bar** and the **winarchy menu**.
 - **Windows:** dark or light mode and the accent colour.
-- **Wallpaper:** your own pictures from `~\.glzr\winarchy\backgrounds\<theme id>` (for example `backgrounds\gruvbox`), then three drawn from the theme's colours. Appearance → Pick background lists them with small previews: Enter sets one and the menu stays open, so you can arrow down and press Enter again. Appearance → Next background also stays open; keep pressing Enter to cycle.
+- **Wallpaper:** your own pictures from `~\.glzr\winarchy\backgrounds\<theme id>` (for example `backgrounds\gruvbox`), then three drawn from the theme's colours. Super+Ctrl+Alt+Space (or Appearance → Pick background) lists them with small previews: Enter sets one and the menu stays open, so you can arrow down and press Enter again. Appearance → Next background also stays open; keep pressing Enter to cycle.
 - **Windows Terminal:** a `winarchy` colour scheme, set as the default, plus a matching Terminal theme for its menus.
 - **VS Code:** the matching colour theme, installing its extension if needed.
 - **Firefox:** toolbars, tabs, menus and the new tab page (through `userChrome.css`, which winarchy switches on). Shows the next time Firefox starts. Your own `userChrome.css` is kept; winarchy only adds one import line.

@@ -145,7 +145,7 @@
           {
             "label": "Pick background",
             "id": "backgrounds",
-            "hint": "with previews",
+            "hint": "Super+Ctrl+Alt+Space",
             "provider": "backgrounds",
             "items": []
           },
