@@ -18,12 +18,13 @@
 //
 //  * Bar watchdog - restarts Zebar if it runs without its local web server (the grey bar).
 //  * Reminders  - pops up reminders.json entries (written by `winarchy remind`) when they're due.
+//  * TileGuard  - puts a tiled window back in its tile when the app resizes it (VLC on play).
 //  * Drop-down terminal - Super+` shows / hides Windows Terminal's quake window (opened with
 //                 the title "winarchy-dropdown", which GlazeWM's window rules ignore).
 //
 // Options live in settings.json next to the exe:
 //   { "hideTaskbar": true, "blockStartMenu": true, "autotile": true, "quakeTerminal": true,
-//     "barWatchdog": true, "stayAwake": false, "nightLight": false }
+//     "barWatchdog": true, "keepTiles": true, "stayAwake": false, "nightLight": false }
 //
 // Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
 
@@ -111,6 +112,8 @@ static class Daemon
                 var t = new Thread(Autotile.Loop) { IsBackground = true };
                 t.Start();
             }
+
+            if (Flag("keepTiles", true)) TileGuard.Start(); // hook runs on this (UI) thread's message loop
 
             Application.Run();
         }
@@ -594,7 +597,7 @@ static class WorkspaceTidy
         return map;
     }
 
-    static string Glaze(string args)
+    internal static string Glaze(string args)
     {
         var psi = new System.Diagnostics.ProcessStartInfo(Cli, args)
         {
@@ -670,6 +673,102 @@ static class WorkspaceTidy
         }
         catch { }
         finally { Interlocked.Exchange(ref busy, 0); }
+    }
+}
+
+// Some apps resize their own window after GlazeWM has tiled it: VLC grows to the video's size when
+// a file starts playing. GlazeWM doesn't notice, so the window spills behind its neighbours and the
+// video looks cut off. This watches windows move and, when a tiled window no longer fits its tile,
+// asks GlazeWM to redraw, which puts it back.
+static class TileGuard
+{
+    delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint tid, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
+    struct RECT { public int L, T, R, B; }
+    const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B, WINEVENT_SKIPOWNPROCESS = 2, GA_ROOT = 2;
+    const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, Slack = 4;
+
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+    static readonly WinEventProc proc = OnMove; // a field, so the delegate outlives the hook
+    static readonly object gate = new object();
+    static readonly HashSet<IntPtr> moved = new HashSet<IntPtr>();
+    // Per window: when we last redrew for it, and for which tile and size. A window that can't
+    // shrink to its tile (a big minimum size) stays off; don't keep redrawing for it.
+    static readonly Dictionary<long, List<DateTime>> recent = new Dictionary<long, List<DateTime>>();
+    static readonly Dictionary<long, string> lastFix = new Dictionary<long, string>();
+    static System.Threading.Timer timer;
+    static int busy;
+
+    public static void Start()
+    {
+        timer = new System.Threading.Timer(Check, null, Timeout.Infinite, Timeout.Infinite);
+        SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, proc, 0, 0, WINEVENT_SKIPOWNPROCESS);
+    }
+
+    static void OnMove(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        // Fires for every move of anything (carets, scroll bars...): keep this cheap.
+        if (idObject != 0 || idChild != 0 || hwnd == IntPtr.Zero) return;
+        if (GetAncestor(hwnd, GA_ROOT) != hwnd || !IsWindowVisible(hwnd)) return;
+        lock (gate) moved.Add(hwnd);
+        timer.Change(500, Timeout.Infinite); // after things settle
+    }
+
+    static void Check(object state)
+    {
+        if (Interlocked.Exchange(ref busy, 1) == 1) { timer.Change(500, Timeout.Infinite); return; }
+        try
+        {
+            // A mouse button down means a drag or resize in progress; GlazeWM handles those itself.
+            if (GetAsyncKeyState(0x01) < 0 || GetAsyncKeyState(0x02) < 0) { timer.Change(500, Timeout.Infinite); return; }
+            var handles = new HashSet<long>();
+            lock (gate) { foreach (var h in moved) handles.Add(h.ToInt64()); moved.Clear(); }
+            if (handles.Count == 0) return;
+
+            var top = Json.DeserializeObject(WorkspaceTidy.Glaze("query windows")) as Dictionary<string, object>;
+            var data = top == null ? null : top["data"] as Dictionary<string, object>;
+            if (data == null) return;
+            bool redraw = false;
+            foreach (var o in (object[])data["windows"])
+            {
+                var w = (Dictionary<string, object>)o;
+                long handle = Convert.ToInt64(w["handle"]);
+                var st = w["state"] as Dictionary<string, object>;
+                if (!handles.Contains(handle) || st == null || Convert.ToString(st["type"]) != "tiling") continue;
+                int x = Convert.ToInt32(w["x"]), y = Convert.ToInt32(w["y"]);
+                int width = Convert.ToInt32(w["width"]), height = Convert.ToInt32(w["height"]);
+                RECT r;
+                if (DwmGetWindowAttribute(new IntPtr(handle), DWMWA_EXTENDED_FRAME_BOUNDS, out r, Marshal.SizeOf(typeof(RECT))) != 0) continue;
+                if (Math.Abs(r.L - x) <= Slack && Math.Abs(r.T - y) <= Slack &&
+                    Math.Abs(r.R - r.L - width) <= Slack && Math.Abs(r.B - r.T - height) <= Slack) continue;
+                if (Allowed(handle, string.Join(",", x, y, width, height, r.L, r.T, r.R, r.B))) redraw = true;
+            }
+            if (redraw) WorkspaceTidy.Glaze("command wm-redraw");
+        }
+        catch { }
+        finally { Interlocked.Exchange(ref busy, 0); }
+    }
+
+    // At most 3 redraws a minute per window, and not twice within 10 s for the exact same mismatch.
+    static bool Allowed(long handle, string key)
+    {
+        var now = DateTime.UtcNow;
+        List<DateTime> times;
+        if (!recent.TryGetValue(handle, out times)) recent[handle] = times = new List<DateTime>();
+        times.RemoveAll(t => (now - t).TotalSeconds > 60);
+        string last;
+        if (times.Count >= 3 || (times.Count > 0 && lastFix.TryGetValue(handle, out last) && last == key && (now - times[times.Count - 1]).TotalSeconds < 10))
+            return false;
+        times.Add(now);
+        lastFix[handle] = key;
+        if (recent.Count > 200) // closed windows
+            foreach (var k in new List<long>(recent.Keys))
+                if (recent[k].TrueForAll(t => (now - t).TotalSeconds > 60)) { recent.Remove(k); lastFix.Remove(k); }
+        return true;
     }
 }
 

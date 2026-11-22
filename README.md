@@ -254,7 +254,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `glaze` for a GlazeWM command.
   - `terminal` for PowerShell run in Windows Terminal.
   - `page` to jump to another page, or `items` for a submenu.
-- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), `barWatchdog`, `tidyWorkspaces`, plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
+- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), `barWatchdog`, `tidyWorkspaces`, `keepTiles`, plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
 - **Top bar:** `~\.glzr\zebar\winarchy\bar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
@@ -284,6 +284,7 @@ This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Ter
   - **Reminders.** It watches `reminders.json` and pops each one up when it's due.
   - **Drop-down terminal.** On Super+` it opens Windows Terminal's quake window with the tab title `winarchy-dropdown` (which GlazeWM's window rules ignore, so it isn't tiled), and shows or hides it after that. Terminal also hides it by itself when you click elsewhere. Super+W closes it (GlazeWM's own Super+W can't see it, so the daemon handles that key while it's in front).
   - **Workspaces back in place.** GlazeWM ties workspaces to monitors by number, and the numbers shift while a monitor sleeps or is unplugged, so workspace 1 could end up on a side screen and stay there. When monitors are added or removed (and when GlazeWM starts), the daemon moves each workspace back to its own monitor. Workspaces you move yourself with Super+Alt+Arrows stay put until then. Turn it off with `"tidyWorkspaces": false`.
+  - **Windows kept in their tiles.** Some apps resize their own window after GlazeWM has tiled it. VLC, for example, grows to the video's size when a file starts playing, so part of the video ends up hidden behind the neighbouring windows. When a tiled window stops matching its tile, the daemon asks GlazeWM to redraw, which puts it back within about a second. Turn it off with `"keepTiles": false`.
 
 ## Antivirus
 
