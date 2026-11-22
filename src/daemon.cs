@@ -996,6 +996,55 @@ static class BarWatchdog
     public static void Start()
     {
         timer = new System.Threading.Timer(Check, null, 20000, 5000);
+        spaceTimer = new System.Threading.Timer(KeepSpace, null, 10000, 2000);
+    }
+
+    // When monitors sleep and wake (or are unplugged and plugged back in), Windows can forget the
+    // strip the bar reserves at the top of the screen while the bar itself stays put. GlazeWM then
+    // tiles windows over the bar. Every 2 seconds: if the bar is showing at the top of the main
+    // screen but the screen's work area no longer leaves room for it, ask Windows to reserve it
+    // again. GlazeWM moves the windows down by itself once the work area changes.
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int L, T, R, B; }
+    [StructLayout(LayoutKind.Sequential)] struct APPBARDATA { public int cb; public IntPtr hWnd; public uint msg; public uint edge; public RECT rc; public IntPtr lParam; }
+    [DllImport("shell32.dll")] static extern UIntPtr SHAppBarMessage(uint msg, ref APPBARDATA data);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, ref RECT r, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    const uint ABM_SETPOS = 3, ABE_TOP = 1, SPI_GETWORKAREA = 0x30;
+    static System.Threading.Timer spaceTimer;
+    static int spaceBusy;
+    static DateTime lastFix = DateTime.MinValue;
+
+    static void KeepSpace(object state)
+    {
+        if (Interlocked.Exchange(ref spaceBusy, 1) == 1) return;
+        IntPtr oldDpi = IntPtr.Zero;
+        try
+        {
+            oldDpi = SetThreadDpiAwarenessContext(new IntPtr(-4)); // physical pixels, like the bar's rect
+            IntPtr bar = FindWindow(null, "Zebar - winarchy / bar");
+            if (bar == IntPtr.Zero || !IsWindowVisible(bar) || IsIconic(bar)) return; // bar hidden on purpose
+            RECT r, work = new RECT();
+            if (!GetWindowRect(bar, out r) || !SystemParametersInfo(SPI_GETWORKAREA, 0, ref work, 0)) return;
+            int height = r.B - r.T;
+            // Only a bar docked along the top of the main screen (which starts at 0,0).
+            if (r.T != 0 || r.L > 0 || height <= 0 || height > 200) return;
+            if (work.T >= r.B) return; // room is still kept: the usual case
+            if (DateTime.Now - lastFix < TimeSpan.FromSeconds(30)) return; // didn't help last time
+            lastFix = DateTime.Now;
+            var d = new APPBARDATA { hWnd = bar, edge = ABE_TOP, rc = r };
+            d.cb = Marshal.SizeOf(d);
+            SHAppBarMessage(ABM_SETPOS, ref d);
+        }
+        catch { }
+        finally
+        {
+            if (oldDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(oldDpi);
+            Interlocked.Exchange(ref spaceBusy, 0);
+        }
     }
 
     static bool Listening()
