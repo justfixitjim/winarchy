@@ -432,6 +432,32 @@
           </button>`;
       }
 
+      // Workspaces, like Omarchy's: 1-5 always in place (GlazeWM only keeps workspaces that are in
+      // use, so on their own the numbers came and went), plus any other workspace in use on any
+      // monitor. Empty ones are dim; click one to go to it, wherever it is.
+      function Workspaces({ wm }) {
+        const all = wm.allWorkspaces || wm.currentWorkspaces || [];
+        const byName = new Map(all.map(w => [w.name, w]));
+        const names = [...new Set(['1', '2', '3', '4', '5', ...all.map(w => w.name)])]
+          .sort((a, b) => (parseFloat(a) - parseFloat(b)) || a.localeCompare(b));
+        const here = wm.currentMonitor?.id;
+        return html`
+          <div className="workspaces">
+            ${names.map(name => {
+              const w = byName.get(name);
+              const used = w && (w.children || []).length > 0;
+              const elsewhere = w && here && w.parentId !== here;
+              const cls = ['workspace', w?.hasFocus && 'focused', w?.isDisplayed && 'displayed', !used && 'empty', elsewhere && 'elsewhere'];
+              const tip = `Workspace ${name}${!w ? '' : !used ? ' (empty)' : ''}${elsewhere ? ', on another monitor' : ''}`;
+              return html`
+                <button key=${name} className=${cls.filter(Boolean).join(' ')} title=${tip}
+                  onClick=${() => wm.runCommand(`focus --workspace ${name}`)}>
+                  ${w?.displayName ?? name}
+                </button>`;
+            })}
+          </div>`;
+      }
+
       // Icon for the current network status.
       function networkIcon(net) {
         switch (net.defaultInterface?.type) {
@@ -480,17 +506,7 @@
                 title="winarchy menu (Super+Alt+Space)"
                 onClick=${() => run(WINARCHY)}
               ></button>
-              ${wm && html`
-                <div className="workspaces">
-                  ${wm.currentWorkspaces.map(workspace => html`
-                    <button
-                      className=${`workspace ${workspace.hasFocus && 'focused'} ${workspace.isDisplayed && 'displayed'}`}
-                      onClick=${() => wm.runCommand(`focus --workspace ${workspace.name}`)}
-                      key=${workspace.name}
-                    >
-                      ${workspace.displayName ?? workspace.name}
-                    </button>`)}
-                </div>`}
+              ${wm && html`<${Workspaces} wm=${wm} />`}
             </div>
 
             <div className="center">

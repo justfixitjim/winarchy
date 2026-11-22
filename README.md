@@ -126,11 +126,11 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 
 ## Top bar
 
-The bar sits on the main monitor only (each extra bar costs over 100 MB of memory) and reserves its strip there, so windows tile below it. Its workspace numbers are the main monitor's; Super+6 to 9 still switch the others. To show it on every monitor, set `"monitorSelection": { "type": "all" }` in `~\.glzr\zebar\winarchy\zpack.json` and raise GlazeWM's top `outer_gap`.
+The bar sits on the main monitor only (each extra bar costs over 100 MB of memory) and reserves its strip there, so windows tile below it. It always shows workspaces 1-5 (dim when empty), plus any other workspace in use on another monitor (dotted underline). To show it on every monitor, set `"monitorSelection": { "type": "all" }` in `~\.glzr\zebar\winarchy\zpack.json` and raise GlazeWM's top `outer_gap`.
 
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
 - **AI usage** (Claude Code, Codex): see [AI usage and accounts](#ai-usage-and-accounts).
-- **Workspace numbers** switch workspaces when clicked.
+- **Workspace numbers** switch workspaces when clicked, on whichever monitor they're on.
 - **Clock** (centre): click for the calendar panel: the month with ISO week numbers (scroll or the arrows change month) and **reminders**. Type what to remind you of, pick 5, 10, 25 or 60 minutes (or type any number) and Add; when it's due a small themed card pops up top right with a chime, until you click it. From a terminal: `winarchy remind add 10 Tea`.
 - **Indicators** (next to the clock): icons for whatever is on: a pending reminder (with its countdown), stay awake, do not disturb, night light. Hover the spot to see the ones that are off too; click any to switch it.
   - **Stay awake** keeps the PC from sleeping or turning the screen off, until you switch it off again (it survives a restart of GlazeWM).
@@ -224,7 +224,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
   - `glaze` for a GlazeWM command.
   - `terminal` for PowerShell run in Windows Terminal.
   - `page` to jump to another page, or `items` for a submenu.
-- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), `barWatchdog`, plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
+- **Background helper:** `~\.glzr\winarchy\settings.json` holds `hideTaskbar`, `blockStartMenu`, `autotile` and `quakeTerminal` (Super+`), `barWatchdog`, `tidyWorkspaces`, plus the `stayAwake` and `nightLight` toggles and `defaultAgent`. Changes take effect when GlazeWM restarts.
 - **Taskbar:** Super+Space → Trigger → Toggle → Windows taskbar shows or hides it on the fly.
 - **Top bar:** `~\.glzr\zebar\winarchy\bar.html` (`TEMP_UNIT` at the top switches between °F and °C).
 
@@ -252,7 +252,8 @@ This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Ter
   - **Stay awake and night light.** It holds Windows' "keep the system and display on" request, and sets each display's colour ramp (re-applying it after sleep or a display change).
   - **Bar watchdog.** Once in a while Zebar starts without its local web server and the bar is just a grey strip. Every 5 seconds the daemon checks; if Zebar is running but its server isn't, it restarts Zebar (at most 3 times in 10 minutes). Turn it off with `"barWatchdog": false`.
   - **Reminders.** It watches `reminders.json` and pops each one up when it's due.
-  - **Drop-down terminal.** On Super+` it opens Windows Terminal's quake window with the tab title `winarchy-dropdown` (which GlazeWM's window rules ignore, so it isn't tiled), and shows or hides it after that. Terminal also hides it by itself when you click elsewhere.
+  - **Drop-down terminal.** On Super+` it opens Windows Terminal's quake window with the tab title `winarchy-dropdown` (which GlazeWM's window rules ignore, so it isn't tiled), and shows or hides it after that. Terminal also hides it by itself when you click elsewhere. Super+W closes it (GlazeWM's own Super+W can't see it, so the daemon handles that key while it's in front).
+  - **Workspaces back in place.** GlazeWM ties workspaces to monitors by number, and the numbers shift while a monitor sleeps or is unplugged, so workspace 1 could end up on a side screen and stay there. When monitors are added or removed (and when GlazeWM starts), the daemon moves each workspace back to its own monitor. Workspaces you move yourself with Super+Alt+Arrows stay put until then. Turn it off with `"tidyWorkspaces": false`.
 
 ## Notes
 

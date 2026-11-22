@@ -106,6 +106,17 @@ body,
     background: color-mix(in srgb, var(--wa-fg) 15%, transparent);
   }
 
+  /* Nothing open there (or not created yet). */
+  &.empty {
+    color: color-mix(in srgb, var(--wa-fg) 45%, transparent);
+  }
+
+  /* Lives on one of the other monitors. */
+  &.elsewhere {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+
   &.focused,
   &:hover {
     background: color-mix(in srgb, var(--wa-accent) 50%, transparent);

@@ -104,7 +104,9 @@ static class Daemon
                 if (ToggleSetting("hideTaskbar", true)) Taskbar.Hide(OriginalAutoHidePath); else Taskbar.Restore(OriginalAutoHidePath);
             });
 
-            if (Flag("autotile", true))
+            Autotile.Enabled = Flag("autotile", true);
+            Autotile.Tidy = Flag("tidyWorkspaces", true);
+            if (Autotile.Enabled || Autotile.Tidy)
             {
                 var t = new Thread(Autotile.Loop) { IsBackground = true };
                 t.Start();
@@ -268,11 +270,26 @@ static class SuperKey
                 return new IntPtr(1);
             }
             if (vk == VK_OEM_3 && !down) graveDown = false;
+
+            // Super+W on the drop-down terminal closes it. GlazeWM ignores that window, so its own
+            // Super+W would close the tiled window behind it instead; this key never reaches it.
+            if (vk == VK_W && Quake)
+            {
+                if (down && superDown && (wSwallowed || Dropdown.InFront()))
+                {
+                    if (!wSwallowed) Dropdown.Close();
+                    wSwallowed = true;
+                    return new IntPtr(1);
+                }
+                if (!down && wSwallowed) { wSwallowed = false; return new IntPtr(1); }
+            }
         }
         return CallNextHookEx(hook, code, wParam, lParam);
     }
 
+    const int VK_W = 0x57;
     static bool graveDown; // ignore key repeat
+    static bool wSwallowed;
 }
 
 // Drop-down terminal: Windows Terminal's quake window, opened with a fixed tab title that
@@ -295,6 +312,27 @@ static class Dropdown
     [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 
     static IntPtr hwnd;
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+
+    static bool IsDropdown(IntPtr h)
+    {
+        if (h == IntPtr.Zero) return false;
+        var cls = new StringBuilder(64);
+        GetClassName(h, cls, 64);
+        if (cls.ToString() != "CASCADIA_HOSTING_WINDOW_CLASS") return false;
+        var title = new StringBuilder(256);
+        GetWindowText(h, title, 256);
+        return title.ToString() == Title;
+    }
+
+    // Called from the keyboard hook: only cheap window calls, nothing that waits.
+    public static bool InFront() { return IsDropdown(GetForegroundWindow()); }
+
+    public static void Close()
+    {
+        IntPtr h = GetForegroundWindow();
+        if (IsDropdown(h)) PostMessage(h, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero);
+    }
 
     static IntPtr Find()
     {
@@ -456,7 +494,10 @@ static class Autotile
         using (var ws = new ClientWebSocket())
         {
             await ws.ConnectAsync(new Uri("ws://127.0.0.1:6123"), CancellationToken.None);
-            await Send(ws, "sub -e focus_changed");
+            // Not monitor_updated: that also fires when an app bar (Zebar) docks, and tidying then
+            // would undo workspaces moved on purpose (Super+Alt+Arrows).
+            await Send(ws, "sub -e focus_changed monitor_added monitor_removed");
+            if (Tidy) WorkspaceTidy.Soon(5000); // GlazeWM just started (or the daemon did)
             var buf = new byte[16384];
             while (ws.State == WebSocketState.Open)
             {
@@ -476,11 +517,17 @@ static class Autotile
         }
     }
 
+    public static bool Enabled = true, Tidy = true;
+
     static string Decide(string message)
     {
         var msg = Json.DeserializeObject(message) as Dictionary<string, object>;
         var data = Get(msg, "data");
-        if (data == null || Str(data, "eventType") != "focus_changed") return null;
+        if (data == null) return null;
+        string type = Str(data, "eventType") ?? "";
+        // Monitors come and go (sleep, unplug): once they've settled, put workspaces back.
+        if (type.StartsWith("monitor_")) { if (Tidy) WorkspaceTidy.Soon(8000); return null; }
+        if (!Enabled || type != "focus_changed") return null;
         var win = Get(data, "focusedContainer");
         if (win == null || Str(win, "type") != "window") return null;
         var state = Get(win, "state");
@@ -505,6 +552,120 @@ static class Autotile
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         return ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+}
+
+// GlazeWM binds workspaces to monitors by number (bind_to_monitor: 1). While a monitor is asleep
+// or unplugged the numbers shift, workspaces move to whichever monitor now has their number, and
+// they stay there when it comes back (workspace 1 ending up on a side monitor). Once monitors
+// have settled, this moves each workspace back to its own monitor, then puts focus back.
+static class WorkspaceTidy
+{
+    static readonly string Cli = Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\glzr.io\GlazeWM\cli\glazewm.exe");
+    static readonly string Config = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\.glzr\glazewm\config.yaml");
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+    static readonly object gate = new object();
+    static System.Threading.Timer timer;
+    static int busy;
+
+    // Runs after `ms` of quiet; each new call restarts the wait.
+    public static void Soon(int ms)
+    {
+        lock (gate)
+        {
+            if (timer == null) timer = new System.Threading.Timer(Run, null, ms, Timeout.Infinite);
+            else timer.Change(ms, Timeout.Infinite);
+        }
+    }
+
+    class Mon { public double X, Y; public List<string> Workspaces = new List<string>(); }
+
+    static Dictionary<string, int> Bindings()
+    {
+        var map = new Dictionary<string, int>();
+        string text = SafeFile.Read(Config) ?? "";
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text,
+            @"-\s*name:\s*['""]?([^'""\r\n]+?)['""]?\s*\r?\n\s*bind_to_monitor:\s*(\d+)"))
+            map[m.Groups[1].Value] = int.Parse(m.Groups[2].Value);
+        return map;
+    }
+
+    static string Glaze(string args)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo(Cli, args)
+        {
+            CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8
+        };
+        using (var p = System.Diagnostics.Process.Start(psi))
+        {
+            string output = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(5000);
+            return output;
+        }
+    }
+
+    // Monitors in GlazeWM's order (the numbers bind_to_monitor uses), with their workspaces.
+    static List<Mon> Monitors(out string focused)
+    {
+        focused = null;
+        var list = new List<Mon>();
+        var top = Json.DeserializeObject(Glaze("query monitors")) as Dictionary<string, object>;
+        var data = top["data"] as Dictionary<string, object>;
+        foreach (var o in (object[])data["monitors"])
+        {
+            var m = (Dictionary<string, object>)o;
+            var mon = new Mon
+            {
+                X = Convert.ToDouble(m["x"]) + Convert.ToDouble(m["width"]) / 2,
+                Y = Convert.ToDouble(m["y"]) + Convert.ToDouble(m["height"]) / 2
+            };
+            foreach (var c in (object[])m["children"])
+            {
+                var w = (Dictionary<string, object>)c;
+                string name = Convert.ToString(w["name"]);
+                mon.Workspaces.Add(name);
+                if (w.ContainsKey("hasFocus") && w["hasFocus"] is bool && (bool)w["hasFocus"]) focused = name;
+            }
+            list.Add(mon);
+        }
+        return list;
+    }
+
+    static void Run(object state)
+    {
+        if (Interlocked.Exchange(ref busy, 1) == 1) return;
+        try
+        {
+            var bind = Bindings();
+            if (bind.Count == 0 || !File.Exists(Cli)) return;
+            string focus = null;
+            bool moved = false;
+            // One move per pass, then look again: a move can take a step through a middle monitor.
+            for (int pass = 0; pass < 8; pass++)
+            {
+                string focusedNow;
+                var mons = Monitors(out focusedNow);
+                if (focus == null) focus = focusedNow;
+                string name = null, dir = null;
+                for (int i = 0; i < mons.Count && name == null; i++)
+                    foreach (string ws in mons[i].Workspaces)
+                    {
+                        int want;
+                        if (!bind.TryGetValue(ws, out want) || want == i || want >= mons.Count) continue;
+                        double dx = mons[want].X - mons[i].X, dy = mons[want].Y - mons[i].Y;
+                        dir = Math.Abs(dx) >= Math.Abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+                        name = ws;
+                        break;
+                    }
+                if (name == null) break;
+                Glaze("command focus --workspace " + name);
+                Glaze("command move-workspace --direction " + dir);
+                moved = true;
+            }
+            if (moved && focus != null) Glaze("command focus --workspace " + focus);
+        }
+        catch { }
+        finally { Interlocked.Exchange(ref busy, 0); }
     }
 }
 
