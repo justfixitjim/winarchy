@@ -202,6 +202,22 @@ From the Omarchy manual's Toggles, Top Bar, Reminders and Hotkeys chapters (Nove
 
 **Open:** world clock, microphone widget, notification history (Win+N covers it), bar position and background style.
 
+## 6. Before v0.1.0 becomes a full release
+
+v0.1.0 is a GitHub pre-release until these are done:
+
+- [ ] **Clean-PC test.** Turn on Windows Sandbox (admin PowerShell: `Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All`, then restart). Run `.	ests\sandbox\start.ps1 -Ref v0.1.0` and read `tests\sandboxesultseport.txt`. Expect a fix or two on the first run, since the kit has never run.
+- [ ] **Real-key check of the drop-down.** Super+` (the key below Esc, matched by scan code) opens it and Super+W closes it. Keys injected from a script can't test the keyboard hook, so a person has to press them.
+- [ ] **Then:** if everything passes, mark v0.1.0 as a full release. Otherwise fix what failed and tag v0.1.1, bumping both the README install URL and the `-Ref` default in install.ps1.
+
+## 7. Window animations (waiting on GlazeWM)
+
+GlazeWM 3.10.1 has no animations for windows moving, resizing or opening; tiled windows jump into place. Only Windows' own minimise, maximise and close animations play.
+
+- Upstream PR [glzr-io/glazewm#1199](https://github.com/glzr-io/glazewm/pull/1199) adds move, resize and open animations. It is open but not merged, and testers report bugs (windows going transparent, the open animation playing on the wrong windows). [glzr-io/glazewm#1392](https://github.com/glzr-io/glazewm/pull/1392) (also workspace-switch slides) was closed.
+- winarchy can't add these from outside: GlazeWM positions the windows, and animating them from the daemon would fight it.
+- **Plan:** when a GlazeWM release ships animations, turn them on in `config/glazewm.yaml`, choosing short and subtle defaults with an option to switch them off. Shipping a forked GlazeWM build isn't worth it (unsigned binary, upkeep).
+
 ---
 
 ## Suggested order
