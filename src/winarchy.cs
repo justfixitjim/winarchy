@@ -1067,6 +1067,7 @@ static class Program
         string[,] extra =
         {
             { "Dictation (Handy): hold to talk, release to paste", "Right Ctrl" },
+            { "Drop-down terminal: show / hide (Super+W closes it)", "Super + key below Esc" },
             { "Start menu", "Ctrl + Esc" },
             { "Lock screen", "Super + L" },
             { "Clipboard history", "Super + V" },

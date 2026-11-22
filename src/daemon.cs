@@ -240,13 +240,17 @@ static class SuperKey
     }
 
     public static bool BlockStart = true, Quake = true;
-    const int VK_OEM_3 = 0xC0; // ` (grave) on US keyboards
+    const int VK_OEM_3 = 0xC0; // stands for "the key below Esc" in Callback, whatever the layout
 
     static IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
     {
         if (code >= 0)
         {
             int vk = Marshal.ReadInt32(lParam); // KBDLLHOOKSTRUCT.vkCode
+            // The key below Esc (` on US keyboards, ^ on German, ² on French, ¬ on UK) by its
+            // position, which is the same on every layout; its key code is not.
+            if (Marshal.ReadInt32(lParam, 4) == 0x29 && (Marshal.ReadInt32(lParam, 8) & 1) == 0) vk = VK_OEM_3;
+            else if (vk == VK_OEM_3) vk = 0;
             int msg = wParam.ToInt32();
             bool down = msg == 0x100 || msg == 0x104; // WM_KEYDOWN, WM_SYSKEYDOWN
             if (vk == VK_LWIN || vk == VK_RWIN)

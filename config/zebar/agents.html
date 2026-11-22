@@ -50,18 +50,18 @@
           </div>`;
       }
 
-      function Account({ p, a, act }) {
+      function Account({ p, a, act, switching }) {
         return html`
           <div class=${`account ${a.active ? 'active' : ''}`}>
             <div class="account-head">
-              <button
+              ${switching && html`<button
                 class=${`star ${a.preferred ? 'on' : ''}`}
                 title=${a.preferred ? 'Preferred account: auto-switch comes back to it when its limits reset' : 'Make this the preferred account'}
                 onClick=${() => !a.preferred && act(`Preferring ${a.label}...`, ['prefer', p.id, a.id])}
-              ><i class=${`nf ${a.preferred ? 'nf-md-star' : 'nf-md-star_outline'}`}></i></button>
+              ><i class=${`nf ${a.preferred ? 'nf-md-star' : 'nf-md-star_outline'}`}></i></button>`}
               <span class="label" title=${a.active ? 'New sessions use this account' : ''}>${a.label}</span>
               <span class="plan">${a.plan}</span>
-              ${a.active
+              ${!switching ? null : a.active
                 ? html`<span class="in-use">in use</span>`
                 : html`<button class="use" onClick=${() => act(`Switching to ${a.label}...`, ['use', p.id, a.id])}>Use</button>`}
             </div>
@@ -104,6 +104,8 @@
         }, []);
 
         const providers = data?.providers || [];
+        // Account switching moves Claude Code / Codex login files, so it's off until turned on.
+        const switching = data?.switching === true;
         return html`
           <div class="panel">
             <div class="panel-head">
@@ -115,19 +117,27 @@
               <section key=${p.id}>
                 <div class="provider">
                   <span>${p.name}</span>
-                  <button
+                  ${switching && html`<button
                     class=${`switch ${p.mode === 'auto' ? 'on' : ''}`}
                     title=${p.mode === 'auto'
                       ? `Near ${p.threshold}%, new sessions move to the account with the most headroom, and back to the starred account when its limits reset. Click for alert only.`
                       : `Notifies at ${p.threshold}%. Click to switch automatically.`}
                     onClick=${() => act('Saving...', ['mode', p.id, p.mode === 'auto' ? 'manual' : 'auto', String(p.threshold)])}
-                  >${p.mode === 'auto' ? `Auto-switch at ${p.threshold}%` : `Alert at ${p.threshold}%`}</button>
+                  >${p.mode === 'auto' ? `Auto-switch at ${p.threshold}%` : `Alert at ${p.threshold}%`}</button>`}
                 </div>
-                ${p.accounts.map(a => html`<${Account} key=${a.id} p=${p} a=${a} act=${act} />`)}
-                <button class="add" onClick=${() => { zebar.shellSpawn('powershell.exe', [...PS, 'add', p.id]).catch(console.error); close(); }}>
+                ${p.accounts.map(a => html`<${Account} key=${a.id} p=${p} a=${a} act=${act} switching=${switching} />`)}
+                ${switching && html`<button class="add" onClick=${() => { zebar.shellSpawn('powershell.exe', [...PS, 'add', p.id]).catch(console.error); close(); }}>
                   <i class="nf nf-md-account_plus_outline"></i> Add ${p.name} account
-                </button>
+                </button>`}
               </section>`)}
+            ${data && !switching && providers.length > 0 && html`
+              <section>
+                <div class="note">Have more than one Claude Code or Codex subscription? Account switching moves between them
+                  by swapping their sign-ins, and can switch automatically when one runs low.</div>
+                <button class="add" onClick=${() => act('Turning on account switching...', ['switching', 'on'])}>
+                  <i class="nf nf-md-account_switch_outline"></i> Turn on account switching
+                </button>
+              </section>`}
             ${busy && html`<div class="busy">${busy}</div>`}
           </div>`;
       }

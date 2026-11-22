@@ -11,26 +11,36 @@ It's a thin layer over good existing tools:
 | Walker (Super+Space) and the Omarchy menu | The `winarchy` menu: Omarchy's sections (Apps, Appearance, Trigger, Setup, Install, Remove, Update, Learn, System), searchable across apps, open windows and Settings pages, plus quick maths |
 | Super+K keybindings | `winarchy keys`: a searchable cheat sheet read live from your config |
 | Themes (Super+Ctrl+Shift+Space) | Eight themes that recolour borders, bar, menu, Windows, wallpaper, Terminal, VS Code and Firefox |
-| Agents panel | Claude Code and Codex usage in the bar, several accounts, auto-switching near the limit |
+| Agents panel | Claude Code and Codex usage in the bar; optionally several accounts with auto-switching near the limit (off until you turn it on) |
 | Audio, Bluetooth, network and clock panels | Click the bar (or Super+Ctrl+A / B / N, Super+Ctrl+Alt+R): pick outputs and set each app's volume, Bluetooth devices with battery, adapters and IPs, a calendar with reminders |
 | Toggles and indicators | Stay awake (Super+Ctrl+I), do not disturb (Super+Ctrl+Alt+,), night light, hide the bar (Super+Shift+Space), no gaps (Super+Shift+Backspace), shown in the bar while on |
-| Quake console (Super+`) | Windows Terminal drops down from the top and hides again |
+| Quake console (Super + the key below Esc) | Windows Terminal drops down from the top and hides again |
 | Foot terminal | Windows Terminal made bare like foot: no tabs or title bar, JetBrainsMono Nerd Font, padding, theme colours |
 | herdr (agent workspaces) | [herdr](https://github.com/herdrdev/herdr) on Super+Shift+Enter: AI coding agents side by side, with each one's state in a sidebar |
 | Dictation on Right Alt (Superwhisper) | [Handy](https://github.com/cjpais/Handy): free, open-source dictation with local Whisper/Parakeet models. Hold **Right Ctrl** to talk |
 
 ## Install
 
+winarchy is a young personal project (v0.1), so far run on one PC. Read [what it changes](#what-it-changes-and-how-to-undo-it) first; `.\uninstall.ps1` puts everything back.
+
+**Needs:** Windows 11, [winget](https://learn.microsoft.com/windows/package-manager/winget/) (App Installer), and a normal (non-admin) PowerShell. Any keyboard layout and any number of monitors.
+
 In PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/justfixitjim/winarchy/v0.1.0/install.ps1 | iex
+```
+
+That installs release v0.1.0. To pass options that way, run it as a script block:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/justfixitjim/winarchy/v0.1.0/install.ps1))) -KeepTerminal -NoHerdr
 ```
 
 Or clone the repo and run `.\install.ps1`. What the installer does:
 
 1. Installs GlazeWM, Zebar, Windows Terminal, JetBrainsMono Nerd Font, Handy, ffmpeg and ImageMagick with winget, skipping any already installed, and [herdr](https://github.com/herdrdev/herdr) with its official installer (per-user, no admin; it isn't in winget).
-2. Builds `winarchy.exe`, `winarchy-daemon.exe` and `winarchy-top.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
+2. Builds `winarchy.exe`, `winarchy-daemon.exe`, `winarchy-top.exe` and `winarchy-audio.exe` from `src\` using the C# compiler that ships with Windows. No prebuilt binaries are downloaded.
 3. Writes `~\.glzr\glazewm\config.yaml` and `~\.glzr\winarchy\menu.json`, backing up anything it replaces. Workspaces are laid out for your monitors: the primary screen gets 1-5 and the others share 6-9.
 4. Installs the winarchy top bar as a Zebar widget pack (`~\.glzr\zebar\winarchy`).
 5. Gives Windows Terminal the foot-like look (see [Terminal](#terminal-and-agent-workspaces)), saving your old settings first.
@@ -48,6 +58,25 @@ Re-run it any time to upgrade. Options:
 - `-NoHerdr` skips herdr.
 - `-VpnName <name>` picks which Windows VPN connection the bar's VPN button controls (default: the first one found; `none` hides it).
 - `-WithPowerToys` also installs PowerToys. winarchy doesn't need it, but its other tools (Peek, Always on top, ZoomIt) are handy.
+- `-NoMediaTools` skips ffmpeg, ImageMagick and Explorer's "Convert with winarchy" entry.
+- `-Ref main` (with `irm ... | iex`) installs the latest, untested changes instead of the release.
+
+### What it changes, and how to undo it
+
+Everything is per-user; nothing needs admin. `.\uninstall.ps1` undoes all of it (`-RemoveApps` also uninstalls GlazeWM and Zebar; the other apps stay).
+
+| Change | Undo on its own |
+|---|---|
+| Hides the Windows taskbar (and sets it to auto-hide) | menu → Trigger → Toggle → Windows taskbar, or install with `-KeepTaskbar` |
+| A lone Super tap no longer opens Start (Ctrl+Esc still does) | install with `-KeepStartMenu`, or `"blockStartMenu": false` in `~\.glzr\winarchy\settings.json` |
+| GlazeWM tiles your windows; Zebar replaces the taskbar with a bar at the top | `glazewm command wm-exit`, or remove the GlazeWM shortcut from `shell:startup` |
+| A background helper (`winarchy-daemon`) with a keyboard hook (see [antivirus](#antivirus)) | `winarchy-daemon --stop` |
+| Windows Terminal's look and colours, VS Code and Firefox theme colours (old settings backed up first) | install with `-KeepTerminal`, or run `~\.glzr\winarchy\tools\theme.ps1 -Restore` |
+| Your GlazeWM config and Zebar settings (backed up as `*.bak-<date>`) | install with `-KeepConfig` |
+| Starts at sign-in: GlazeWM (which starts Zebar, the daemon and the menu) and Handy | remove them from `shell:startup` / Task Manager → Startup apps |
+| Explorer's right-click "Convert with winarchy" on pictures and videos | install with `-NoMediaTools` |
+
+It never touches your Claude Code or Codex sign-ins unless you turn on [account switching](#ai-usage-and-accounts); with it off it only reads them to show usage.
 
 ## Keys
 
@@ -58,7 +87,7 @@ Re-run it any time to upgrade. Options:
 | Super+Escape | Lock / sleep / sign out / restart / shut down |
 | Super+Ctrl+Shift+Space | Pick a colour theme |
 | Super+Alt+R | Start / stop screen recording |
-| Super+` | Drop-down terminal: show / hide |
+| Super+` (the key below Esc, on any layout) | Drop-down terminal: show / hide; Super+W closes it |
 | Super+Ctrl+I | Stay awake (no sleep or screen-off) on / off |
 | Super+Ctrl+Alt+, | Do not disturb on / off |
 | Super+Shift+Space / Super+Shift+Backspace | Hide / show the top bar; window gaps off / on |
@@ -183,13 +212,14 @@ Omarchy's terminal is foot: just text, no window chrome. winarchy keeps Windows 
 
 Like Omarchy's agents panel: the top bar shows how much of its 5-hour and weekly limits each AI agent's active account has used, for Claude Code and Codex (`Claude 42%  Codex 7%`, green, amber, then red near the limit). Hover for a quick summary; click for the AI panel: a usage bar per limit with its reset countdown and your switching threshold marked, a **Use** button on each other account, a star for your preferred account, the auto-switch toggle, and Add account. It shows the last numbers instantly and only re-checks when they're a few minutes old.
 
+- **Account switching is off until you turn it on** (menu → AI → Account switching → Turn on, or the button in the AI panel), because it moves Claude Code and Codex sign-in files around. Usage shows either way.
 - **Several accounts:** menu → AI → Claude Code (or Codex) → **Add account** opens a sign-in window. Sign in with the other account; the bar then shows both.
 - **Switch account** moves the next account in. For Claude Code, winarchy swaps which sign-in `~\.claude` holds, so new and running `claude` sessions follow. For Codex, new terminals get that account (through `CODEX_HOME`); history, prompts and settings are shared between accounts.
 - **Auto-switch at 90%:** when the active account passes 90% of a limit, new sessions move to the account with the most headroom, with a notification. **Alert only** (the default) just notifies.
 - **Preferred account** (the star in the AI panel): the account you want to be on. Starring an account switches to it if it has room. When auto-switch moves you off it near a limit, it moves you back as soon as that account's limits reset.
 - Usage is checked every few minutes, the way Claude Code's `/usage` and Codex itself read it. Sign-ins stay in their own folders and never leave the PC.
 - The Claude **desktop app** keeps its own sign-in and isn't switched, but its usage still shows, because limits belong to the account.
-- From a terminal: `~\.glzr\winarchy\tools\agents.ps1 status` (also `add`, `use`, `list`, `remove`, `mode`).
+- From a terminal: `~\.glzr\winarchy\tools\agents.ps1 status` (also `add`, `use`, `list`, `remove`, `mode`, `switching on|off`).
 
 ## Themes
 
@@ -255,10 +285,23 @@ This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Ter
   - **Drop-down terminal.** On Super+` it opens Windows Terminal's quake window with the tab title `winarchy-dropdown` (which GlazeWM's window rules ignore, so it isn't tiled), and shows or hides it after that. Terminal also hides it by itself when you click elsewhere. Super+W closes it (GlazeWM's own Super+W can't see it, so the daemon handles that key while it's in front).
   - **Workspaces back in place.** GlazeWM ties workspaces to monitors by number, and the numbers shift while a monitor sleeps or is unplugged, so workspace 1 could end up on a side screen and stay there. When monitors are added or removed (and when GlazeWM starts), the daemon moves each workspace back to its own monitor. Workspaces you move yourself with Super+Alt+Arrows stay put until then. Turn it off with `"tidyWorkspaces": false`.
 
+## Antivirus
+
+The helpers are built on your PC from the source in `src\`, so they're unsigned, and `winarchy-daemon` installs a keyboard hook and sends one key press of its own. That is what stops a lone Super tap from opening Start (and runs Super+` and Super+W on the drop-down terminal). It acts only on Super, the key below Esc and W, and never records, stores or sends any key presses. Some antivirus tools flag that pattern; if yours does, the code is in `src\daemon.cs` (`SuperKey`), or install with `-KeepStartMenu` to run without blocking Start.
+
+## Known limits
+
+- Now and then Zebar starts without its local web server and the bar is a grey strip; the daemon notices and restarts it within about 20 seconds.
+- Night light is a colour filter on the displays, so it doesn't show in screenshots or recordings, and it can briefly drop after sleep (it's put back within 5 seconds).
+- The bar is on the main monitor only (see [Top bar](#top-bar)).
+- Windows running as administrator are only tiled if GlazeWM runs as administrator too.
+- Tested on Windows 11 at 125% scaling with three monitors and a US keyboard. If something looks wrong on yours, please [open an issue](https://github.com/justfixitjim/winarchy/issues/new/choose).
+
 ## Notes
 
+- **Trying a change on a clean PC:** `.\tests\sandbox\start.ps1` installs winarchy in Windows Sandbox, checks it, uninstalls it and checks again, writing `tests\sandbox\results\report.txt`. Add `-Ref v0.1.0` to test a release the way users get it.
+
 - GlazeWM 3.10.1 can't parse quoted program paths in `shell-exec`, so the config writes paths unquoted. Spaces in them are fine.
-- GlazeWM only tiles windows running as administrator if it runs as administrator too.
 - Tray icons live in the bar's collapsible tray (click the `‹ count`); right-click one for the app's own menu. Icons left behind by apps that crashed or were killed disappear within 30 seconds.
 
 ## Roadmap

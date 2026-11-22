@@ -9,6 +9,9 @@
 #   agents.ps1 mode <claude|codex> <manual|auto> [threshold]
 #   agents.ps1 prefer <claude|codex> <id>  the account to be on; auto-switch returns to it
 #                                          once its limits reset
+#   agents.ps1 switching <on|off>          account switching (add / use / prefer / mode) is off
+#                                          until turned on ("accountSwitching" in settings.json),
+#                                          because it moves login files; usage works either way
 #
 # Claude: every session starts in ~\.claude, which holds the login of the "seated" account;
 # the other logins wait in ~\.glzr\winarchy\agents\claude\<id>. Switching swaps the
@@ -79,6 +82,40 @@ function Show-Toast($title, $body) {
 }
 
 function Assert-Provider { if ($Provider -notin 'claude', 'codex') { throw "Say which agent: claude or codex." } }
+
+# --- Opt-in: account switching moves Claude Code / Codex login files, so it's off until asked for.
+$settingsFile = if ($env:WINARCHY_SETTINGS) { $env:WINARCHY_SETTINGS } else { Join-Path (Split-Path $stateDir) 'settings.json' }
+function Test-Switching {
+    $s = Read-Dict $settingsFile
+    if ($s -and $s.ContainsKey('accountSwitching')) { return [bool]$s['accountSwitching'] }
+    # Set up before this was opt-in: already has a second account, so it's in use.
+    foreach ($prov in 'claude', 'codex') {
+        $p = Registry-Path $prov
+        if ((Test-Path $p) -and @((Read-Text $p | ConvertFrom-Json).accounts).Count -gt 1) { return $true }
+    }
+    return $false
+}
+function Set-Switching([bool]$on) {
+    # Same lock and one-step replace as winarchy.exe and winarchy-daemon (settings.json is shared).
+    $lock = New-Object Threading.Mutex($false, 'Local\winarchy-file-settings.json')
+    $have = $false
+    try { $have = $lock.WaitOne(3000) } catch [Threading.AbandonedMutexException] { $have = $true }
+    try {
+        $s = Read-Dict $settingsFile
+        if (-not $s) { $s = New-Object 'Collections.Generic.Dictionary[string,object]' }
+        $s['accountSwitching'] = $on
+        $lines = foreach ($k in @($s.Keys)) { '  ' + (Get-Serializer).Serialize($k) + ': ' + (Get-Serializer).Serialize($s[$k]) }
+        $tmp = "$settingsFile.tmp"
+        Write-Text $tmp ("{`n" + ($lines -join ",`n") + "`n}`n")
+        if (Test-Path $settingsFile) { [IO.File]::Replace($tmp, $settingsFile, [NullString]::Value) } else { Move-Item $tmp $settingsFile }
+    } finally { if ($have) { $lock.ReleaseMutex() } }
+    Remove-Item $usagePath -ErrorAction SilentlyContinue
+}
+function Assert-Switching {
+    if (Test-Switching) { return $true }
+    Show-Toast 'AI account switching is off' 'It swaps Claude Code / Codex logins between accounts. Turn it on: menu > AI > Account switching, or the AI panel.'
+    return $false
+}
 
 # --- Registry: which accounts exist, which one is active, how switching works -------------
 function Registry-Path($prov) { Join-Path $stateDir "$prov.json" }
@@ -272,7 +309,7 @@ function Get-Peak($u) {
 
 function Update-Usage {
     $old = if (Test-Path $usagePath) { Read-Text $usagePath | ConvertFrom-Json } else { $null }
-    $result = [ordered]@{ updated = [DateTimeOffset]::UtcNow.ToString('o'); providers = @() }
+    $result = [ordered]@{ updated = [DateTimeOffset]::UtcNow.ToString('o'); switching = (Test-Switching); providers = @() }
     foreach ($prov in 'claude', 'codex') {
         if ($prov -eq 'codex' -and -not (Test-Path $codexPrimary) -and -not (Test-Path (Registry-Path 'codex'))) { continue }
         if ($prov -eq 'claude' -and -not (Test-Path $claudePrimary)) { continue }
@@ -292,7 +329,7 @@ function Update-Usage {
             [pscustomobject]$rec
         }
         $result.providers += [pscustomobject][ordered]@{ id = $prov; name = $names[$prov]; mode = $reg.mode; threshold = $reg.threshold; active = $reg.active; accounts = @($accounts) }
-        Invoke-AutoSwitch $prov $reg @($accounts)
+        if ($result.switching) { Invoke-AutoSwitch $prov $reg @($accounts) }
     }
     Write-Text $usagePath (($result | ConvertTo-Json -Depth 8 -Compress) + "`n")
     return $result
@@ -503,12 +540,18 @@ switch ($Command) {
             foreach ($a in $reg.accounts) { '{0} {1,-10} {2}' -f $(if ($a.id -eq $reg.active) { '*' } else { ' ' }), $a.id, $a.label }
         }
     }
-    'add' { Assert-Provider; Add-Account $Provider }
+    'switching' {
+        if ($Provider -notin 'on', 'off') { throw 'usage: agents.ps1 switching on|off' }
+        Set-Switching ($Provider -eq 'on')
+        Show-Toast "AI account switching $Provider" $(if ($Provider -eq 'on') { 'Add accounts in the AI panel or menu > AI.' } else { 'Logins stay where they are now.' })
+    }
+    'add' { Assert-Provider; if (Assert-Switching) { Add-Account $Provider } }
     'finish' { Assert-Provider; Complete-SignIn $Provider $Arg1 }
-    'use' { Assert-Provider; Use-Account $Provider $Arg1; Remove-Item $usagePath -ErrorAction SilentlyContinue }
+    'use' { Assert-Provider; if (Assert-Switching) { Use-Account $Provider $Arg1; Remove-Item $usagePath -ErrorAction SilentlyContinue } }
     'remove' { Assert-Provider; Remove-Account $Provider $Arg1 }
     'prefer' {
         Assert-Provider
+        if (-not (Assert-Switching)) { return }
         $reg = Load-Registry $Provider
         $acct = Find-Account $reg $Arg1
         if (-not $acct) { throw "No $($names[$Provider]) account '$Arg1'." }
@@ -531,6 +574,7 @@ switch ($Command) {
     }
     'mode' {
         Assert-Provider
+        if (-not (Assert-Switching)) { return }
         $reg = Load-Registry $Provider
         if ($Arg1) { if ($Arg1 -notin 'manual', 'auto') { throw 'Mode is manual or auto.' }; $reg.mode = $Arg1 }
         if ($Arg2) { $reg.threshold = [int]$Arg2 }
@@ -539,5 +583,5 @@ switch ($Command) {
         $msg = if ($reg.mode -eq 'auto') { "switches new sessions to the account with the most headroom at $($reg.threshold)%." } else { "notifies at $($reg.threshold)% and switches when you say so." }
         Show-Toast "$($names[$Provider]) accounts" "$($names[$Provider]) $msg"
     }
-    default { throw "Unknown command '$Command'. Commands: usage, status, add, use, prefer, list, remove, mode." }
+    default { throw "Unknown command '$Command'. Commands: usage, status, add, use, prefer, list, remove, mode, switching." }
 }

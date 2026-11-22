@@ -13,7 +13,7 @@
     Safe to re-run: it upgrades in place.
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/justfixitjim/winarchy/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/justfixitjim/winarchy/v0.1.0/install.ps1 | iex
 
 .EXAMPLE
     .\install.ps1 -KeepConfig -KeepTaskbar
@@ -42,7 +42,10 @@ param(
     [switch]$NoHerdr,
     # Windows VPN connection for the bar's VPN button (default: the first one found).
     # Pass -VpnName none to hide the button.
-    [string]$VpnName
+    [string]$VpnName,
+    # Which version to download when run without a checkout (irm ... | iex): a release tag, or
+    # 'main' for the latest, untested changes.
+    [string]$Ref = 'v0.1.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,13 +57,18 @@ if (-not $here -or -not (Test-Path (Join-Path $here 'src\winarchy.cs'))) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $tmp = Join-Path $env:TEMP ('winarchy-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
-    Write-Host "==> Downloading $Repo" -ForegroundColor Cyan
-    Invoke-WebRequest "https://github.com/$Repo/archive/refs/heads/main.zip" -OutFile "$tmp\repo.zip" -UseBasicParsing
+    $kind = if ($Ref -match '^v\d') { 'tags' } else { 'heads' }
+    Write-Host "==> Downloading $Repo ($Ref)" -ForegroundColor Cyan
+    Invoke-WebRequest "https://github.com/$Repo/archive/refs/$kind/$Ref.zip" -OutFile "$tmp\repo.zip" -UseBasicParsing
     Expand-Archive "$tmp\repo.zip" -DestinationPath $tmp
     $root = Get-ChildItem $tmp -Directory | Select-Object -First 1
     $forward = @()
-    foreach ($k in $PSBoundParameters.Keys) { $forward += "-$k" }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root.FullName 'install.ps1') @forward
+    foreach ($k in $PSBoundParameters.Keys) {
+        $v = $PSBoundParameters[$k]
+        if ($v -is [switch]) { if ($v.IsPresent) { $forward += "-$k" } } else { $forward += "-$k"; $forward += [string]$v }
+    }
+    try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root.FullName 'install.ps1') @forward }
+    finally { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
     return
 }
 

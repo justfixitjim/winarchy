@@ -36,6 +36,24 @@
             "terminal": "Set-ExecutionPolicy -Scope Process Bypass -Force; try { & \"$env:USERPROFILE\\.glzr\\winarchy\\tools\\agents.ps1\" status } catch { Write-Host $_ -ForegroundColor Red }; Read-Host 'Press Enter to close'; exit"
           },
           {
+            "label": "Account switching",
+            "hint": "several subscriptions",
+            "items": [
+              {
+                "label": "Turn on",
+                "hint": "swaps Claude Code / Codex sign-ins",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" switching on"
+              },
+              {
+                "label": "Turn off",
+                "hint": "sign-ins stay as they are",
+                "run": "powershell.exe",
+                "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\agents.ps1\" switching off"
+              }
+            ]
+          },
+          {
             "label": "Claude Code",
             "items": [
               {

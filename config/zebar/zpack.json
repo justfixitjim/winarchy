@@ -111,7 +111,7 @@
         "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": ".*agents\\.ps1 (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|prefer (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex))$"
+            "argsRegex": ".*agents\\.ps1 (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|prefer (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex)|switching on)$"
           },
           {
             "program": "cmd.exe",

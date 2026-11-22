@@ -1,0 +1,41 @@
+name: Something isn't working
+description: A key, the bar, a panel, the installer or the uninstaller misbehaves.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: The keys you pressed or what you clicked, and what you saw. A screenshot helps for the bar and panels.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: winarchy version
+      description: The release you installed (e.g. v0.1.0), or "main".
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver`, e.g. "Windows 11 24H2, build 26100.2314".
+    validations:
+      required: true
+  - type: input
+    id: displays
+    attributes:
+      label: Monitors and scaling
+      description: e.g. "2 monitors: 4K at 150% (main), 1080p at 100%".
+  - type: input
+    id: keyboard
+    attributes:
+      label: Keyboard layout
+      description: e.g. "US", "UK", "German".
+  - type: textarea
+    id: install
+    attributes:
+      label: Installer output
+      description: If it's about installing or uninstalling, paste what the script printed.
+      render: text
