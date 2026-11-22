@@ -245,7 +245,7 @@ if (-not (Test-Path $csc)) { throw ".NET Framework C# compiler not found at $csc
 $common = @('/nologo', '/codepage:65001', '/optimize+', '/target:winexe')
 & $csc @common "/out:$dest\winarchy.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll `
     /r:System.Web.Extensions.dll /r:Microsoft.CSharp.dll /r:System.Core.dll /r:System.Data.dll `
-    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs" "$here\src\safefile.cs" "$here\src\glzr.cs"
+    "$here\src\winarchy.cs" "$here\src\toggles.cs" "$here\src\quiethours.cs" "$here\src\safefile.cs" "$here\src\glzr.cs" "$here\src\backgrounds.cs"
 if ($LASTEXITCODE) { throw 'Building winarchy.exe failed.' }
 & $csc @common "/out:$dest\winarchy-daemon.exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll `
     "$here\src\daemon.cs" "$here\src\safefile.cs" "$here\src\glzr.cs"

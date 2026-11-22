@@ -138,9 +138,16 @@
           },
           {
             "label": "Next background",
-            "hint": "theme wallpapers",
-            "run": "powershell.exe",
-            "args": "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{dir}\\tools\\theme.ps1\" -NextBackground"
+            "hint": "Enter again for the next",
+            "builtin": "bg:next",
+            "stay": true
+          },
+          {
+            "label": "Pick background",
+            "id": "backgrounds",
+            "hint": "with previews",
+            "provider": "backgrounds",
+            "items": []
           },
           {
             "label": "Windows colours",

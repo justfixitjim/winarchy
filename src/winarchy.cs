@@ -50,6 +50,8 @@ class Node
     public string Provider; // submenu filled in code: "apps" or "settings"
     public bool Hidden;     // only shows up in search results (open windows)
     public bool Confirm;
+    public bool Stay;       // the menu stays open after running it (e.g. Next background)
+    public string Image;    // a picture shown as a small preview in the row (background picker)
     public List<Node> Items;
     public Node Parent;
     public bool IsMenu { get { return Items != null; } }
@@ -172,7 +174,7 @@ class MenuForm : Form
         list = new ListBox
         {
             Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, BackColor = Bg, ForeColor = Fg,
-            DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = (int)(32 * s), IntegralHeight = false, Font = rowFont
+            DrawMode = DrawMode.OwnerDrawVariable, ItemHeight = (int)(32 * s), IntegralHeight = false, Font = rowFont
         };
         panel.Controls.Add(list);
         panel.Controls.Add(status);
@@ -182,6 +184,11 @@ class MenuForm : Form
 
         list.HandleCreated += delegate { Native.SetWindowTheme(list.Handle, "DarkMode_Explorer", null); };
         list.DrawItem += DrawRow;
+        list.MeasureItem += (o, e) =>
+        {
+            bool pic = e.Index >= 0 && e.Index < rows.Count && rows[e.Index].Node.Image != null;
+            e.ItemHeight = pic ? ThumbSize(s).Height + (int)(12 * s) : (int)(32 * s);
+        };
         list.MouseDoubleClick += delegate { Activate(SelectedNode()); };
         list.MouseDown += delegate { input.Focus(); };
         input.TextChanged += delegate { pendingConfirm = null; Refill(); };
@@ -358,15 +365,38 @@ class MenuForm : Form
             using (var bar = new SolidBrush(Accent)) g.FillRectangle(bar, e.Bounds.X, e.Bounds.Y, Math.Max(3, (int)(3 * s)), e.Bounds.Height);
 
         int pad = (int)(12 * s);
+        var bounds = e.Bounds;
+        if (r.Node.Image != null)
+        {
+            // Preview on the left; drawn as soon as it's ready (the first time takes a moment).
+            Size ts = ThumbSize(s);
+            var box = new Rectangle(bounds.X + pad, bounds.Y + (bounds.Height - ts.Height) / 2, ts.Width, ts.Height);
+            var img = Backgrounds.Thumb(r.Node.Image, ts, () => { try { BeginInvoke((MethodInvoker)list.Invalidate); } catch { } });
+            if (img != null) g.DrawImage(img, box);
+            else using (var ph = new SolidBrush(InputBg)) g.FillRectangle(ph, box);
+            // A border so dark wallpapers don't melt into the menu; the accent marks the current one.
+            if (r.Hint == "current")
+                using (var pen = new Pen(Accent, Math.Max(2, 2 * s))) g.DrawRectangle(pen, box);
+            else
+                using (var pen = new Pen(Dim, 1)) g.DrawRectangle(pen, box.X, box.Y, box.Width - 1, box.Height - 1);
+            bounds = new Rectangle(box.Right, bounds.Y, bounds.Right - box.Right, bounds.Height);
+        }
         string hint = r.Hint ?? "";
         if (pendingConfirm != null && r.Node == pendingConfirm) hint = "Enter again to confirm";
         Size hintSize = TextRenderer.MeasureText(g, hint, hintFont);
-        var hintRect = new Rectangle(e.Bounds.Right - hintSize.Width - pad, e.Bounds.Y, hintSize.Width + pad, e.Bounds.Height);
-        var textRect = new Rectangle(e.Bounds.X + pad, e.Bounds.Y, e.Bounds.Width - hintRect.Width - pad * 2, e.Bounds.Height);
+        var hintRect = new Rectangle(bounds.Right - hintSize.Width - pad, bounds.Y, hintSize.Width + pad, bounds.Height);
+        var textRect = new Rectangle(bounds.X + pad, bounds.Y, bounds.Width - hintRect.Width - pad * 2, bounds.Height);
         var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
         TextRenderer.DrawText(g, r.Text, rowFont, textRect, sel ? Color.White : Fg, flags);
         Color hc = (pendingConfirm != null && r.Node == pendingConfirm) ? Warn : (sel ? Accent : Dim);
         TextRenderer.DrawText(g, hint, hintFont, hintRect, hc, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+    }
+
+    // Size of a background preview in the picker (16:9).
+    public static Size ThumbSize(float scale)
+    {
+        int h = (int)Math.Round(48 * scale);
+        return new Size((int)Math.Round(h * 16 / 9.0), h);
     }
 
     Node SelectedNode()
@@ -427,6 +457,22 @@ class MenuForm : Form
 
     // ── Actions ─────────────────────────────────────────────────────────
 
+    // After a background change: move the "current" mark in the picker.
+    void MarkCurrentBackground()
+    {
+        string theme; int current;
+        var bgs = Backgrounds.List(out theme, out current);
+        foreach (var r in rows)
+        {
+            var b = r.Node.Builtin;
+            if (b == null || !b.StartsWith("bg:") || b == "bg:next") continue;
+            int i = int.Parse(b.Substring(3));
+            r.Node.Hint = i == current ? "current" : (i < bgs.Count && !bgs[i].Made) ? "drawn when picked" : "";
+            r.Hint = r.Node.Hint;
+        }
+        list.Invalidate();
+    }
+
     void Activate(Node n)
     {
         if (n == null) return;
@@ -446,6 +492,21 @@ class MenuForm : Form
             return;
         }
         if (keysMode && n.Run == null && n.Glaze == null) return;
+        if (n.Stay)
+        {
+            // Run it and stay open, so it can be pressed again (next background, next one...).
+            try
+            {
+                if (Program.IsLauncher) Program.RecordUse(n);
+                Program.BackgroundStatus = null;
+                Program.Execute(n);
+                status.ForeColor = Accent;
+                status.Text = Program.BackgroundStatus ?? ("Done: " + n.Label);
+                if (n.Builtin != null && n.Builtin.StartsWith("bg:")) MarkCurrentBackground();
+            }
+            catch (Exception ex) { status.ForeColor = Warn; status.Text = "Failed: " + ex.Message; }
+            return;
+        }
         try
         {
             Hide();
@@ -676,6 +737,14 @@ static class Program
         residentUi.BeginInvoke((MethodInvoker)delegate
         {
             try { using (var f = BuildForm("")) { } openForm = null; } catch { }
+            // Background previews, at the size the picker draws them on the main monitor.
+            try
+            {
+                uint dx = 96, dy = 96;
+                Native.GetDpiForMonitor(Native.MonitorFromPoint(Point.Empty, 1), 0, out dx, out dy);
+                Backgrounds.Prewarm(MenuForm.ThumbSize(dx / 96f));
+            }
+            catch { }
         });
         Application.Run();
         GC.KeepAlive(mutex);
@@ -701,6 +770,18 @@ static class Program
         form.Show();
     }
 
+    // "bg:next" or "bg:<number>".
+    public static int BackgroundIndex(string builtin)
+    {
+        string arg = builtin.Substring(3);
+        if (arg != "next") return int.Parse(arg);
+        string theme; int current;
+        Backgrounds.List(out theme, out current);
+        return current + 1;
+    }
+
+    public static string BackgroundStatus;
+
     public static Node FindById(Node n, string id)
     {
         if (n.Id == id) return n;
@@ -725,6 +806,11 @@ static class Program
         {
             var psi = new ProcessStartInfo(GlazeCli, "command focus --container-id " + n.Builtin.Substring(6)) { CreateNoWindow = true, UseShellExecute = false };
             using (var p = Process.Start(psi)) p.WaitForExit(3000);
+            return;
+        }
+        if (n.Builtin != null && n.Builtin.StartsWith("bg:"))
+        {
+            BackgroundStatus = Backgrounds.Set(BackgroundIndex(n.Builtin));
             return;
         }
         if (n.Builtin == "sleep")
@@ -933,6 +1019,19 @@ static class Program
                     });
                 }
         }
+        else if (n.Provider == "backgrounds")
+        {
+            // The current theme's wallpapers, with previews; Enter sets one and the menu stays open.
+            string theme; int current;
+            var bgs = Backgrounds.List(out theme, out current);
+            for (int i = 0; i < bgs.Count; i++)
+                n.Items.Add(new Node
+                {
+                    Label = bgs[i].Name, Key = "bg:" + theme + ":" + bgs[i].Name, Parent = n, Stay = true,
+                    Builtin = "bg:" + i, Image = bgs[i].Made ? bgs[i].Path : null,
+                    Hint = i == current ? "current" : bgs[i].Made ? "" : "drawn when picked"
+                });
+        }
         else if (n.Provider == "agents")
         {
             // Coding agents for the default-agent key (Super+Shift+Ctrl+A); the installed ones first.
@@ -1011,7 +1110,8 @@ static class Program
         {
             Id = str("id"), Label = str("label") ?? "?", Hint = str("hint"), Run = str("run"), Args = str("args"),
             Glaze = str("glaze"), Terminal = str("terminal"), Page = str("page"), Builtin = str("builtin"),
-            Confirm = d.ContainsKey("confirm") && d["confirm"] is bool && (bool)d["confirm"], Parent = parent
+            Confirm = d.ContainsKey("confirm") && d["confirm"] is bool && (bool)d["confirm"],
+            Stay = d.ContainsKey("stay") && d["stay"] is bool && (bool)d["stay"], Parent = parent
         };
         n.Provider = str("provider");
         if (d.ContainsKey("items") || n.Provider != null)

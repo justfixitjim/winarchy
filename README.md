@@ -229,7 +229,7 @@ Super+Ctrl+Shift+Space (or menu → Appearance → Theme) switches every colour 
 A theme changes:
 - **GlazeWM** window borders, the **top bar** and the **winarchy menu**.
 - **Windows:** dark or light mode and the accent colour.
-- **Wallpaper:** your own pictures from `~\.glzr\winarchy\backgrounds\<theme id>` (for example `backgrounds\gruvbox`), then three drawn from the theme's colours. Appearance → Next background cycles them.
+- **Wallpaper:** your own pictures from `~\.glzr\winarchy\backgrounds\<theme id>` (for example `backgrounds\gruvbox`), then three drawn from the theme's colours. Appearance → Pick background lists them with small previews: Enter sets one and the menu stays open, so you can arrow down and press Enter again. Appearance → Next background also stays open; keep pressing Enter to cycle.
 - **Windows Terminal:** a `winarchy` colour scheme, set as the default, plus a matching Terminal theme for its menus.
 - **VS Code:** the matching colour theme, installing its extension if needed.
 - **Firefox:** toolbars, tabs, menus and the new tab page (through `userChrome.css`, which winarchy switches on). Shows the next time Firefox starts. Your own `userChrome.css` is kept; winarchy only adds one import line.

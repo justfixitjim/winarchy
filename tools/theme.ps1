@@ -4,6 +4,7 @@
 #   theme.ps1 -Next           apply the next theme in the list
 #   theme.ps1 -List           list themes (* marks the current one)
 #   theme.ps1 -NextBackground show the current theme's next wallpaper
+#   theme.ps1 -Background 2    show the current theme's third wallpaper
 #   theme.ps1 -Restore        put back the Windows, Terminal and VS Code settings from before the first theme
 #
 # Targets: glazewm (window borders), bar (Zebar), menu (winarchy menu), windows (dark or light
@@ -24,7 +25,9 @@ param(
     [switch]$NoReload,
     # Report failures only in the console, not in a message box.
     [switch]$NoPopup,
-    [switch]$NextBackground
+    [switch]$NextBackground,
+    # Show the current theme's wallpaper number N (counting from 0), as the menu's picker does.
+    [int]$Background = -1
 )
 $ErrorActionPreference = 'Stop'
 
@@ -326,11 +329,11 @@ if ($Restore) {
 }
 
 $themes = @(Get-Themes)
-if ($NextBackground) {
+if ($NextBackground -or $Background -ge 0) {
     $state = Read-Text $currentPath | ConvertFrom-Json
     $th = ($themes | Where-Object { $_.Id -eq $state.id } | Select-Object -First 1).Theme
     $bgs = @(Get-Backgrounds $state.id $th)
-    $i = ([int]$state.background + 1) % $bgs.Count
+    $i = if ($Background -ge 0) { $Background % $bgs.Count } else { ([int]$state.background + 1) % $bgs.Count }
     Save-Backup
     Set-Wallpaper $bgs[$i]
     Set-Prop $state 'background' $i
