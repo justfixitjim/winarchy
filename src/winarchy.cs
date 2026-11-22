@@ -195,7 +195,8 @@ class MenuForm : Form
         KeyDown += OnKey;
         Deactivate += delegate { if (armed) Close(); };
         Activated += delegate { armed = true; input.Focus(); };
-        Shown += delegate { ForceForeground(); };
+        // Shown is posted, so the menu can already be closed (and disposed) by the time it runs.
+        Shown += delegate { if (IsDisposed || Disposing) return; ShownAt = DateTime.Now; ForceForeground(); };
 
         Refill();
     }
@@ -218,8 +219,12 @@ class MenuForm : Form
         Native.DwmSetWindowAttribute(Handle, 33, ref square, 4);
     }
 
+    // When the menu actually appeared (MaxValue until then).
+    public DateTime ShownAt = DateTime.MaxValue;
+
     void ForceForeground()
     {
+        if (IsDisposed || Disposing) return;
         IntPtr fg = Native.GetForegroundWindow();
         uint fgThread = Native.GetWindowThreadProcessId(fg, IntPtr.Zero);
         uint me = Native.GetCurrentThreadId();
@@ -663,7 +668,7 @@ static class Program
         form.Location = new Point(wa.X + (wa.Width - form.Width) / 2, wa.Y + (int)((wa.Height - form.Height) * 0.38));
         openForm = form;
         form.Shown += delegate { Trace("shown"); };
-        if (IsLauncher) form.Shown += delegate { Launcher.RefreshCacheInBackground(); AddOpenWindows(root); };
+        if (IsLauncher) form.Shown += delegate { if (form.IsDisposed) return; Launcher.RefreshCacheInBackground(); AddOpenWindows(root); };
         return form;
     }
 
@@ -708,6 +713,12 @@ static class Program
         var mutex = new Mutex(true, @"Local\winarchy-resident", out created);
         if (!created) return;
         try { Native.SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch { }
+        // The resident copy runs all day: a stray error goes to a log, not a .NET error box.
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (o, e) =>
+        {
+            try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winarchy-errors.log"), DateTime.Now.ToString("s") + "  " + e.Exception + "\r\n\r\n"); } catch { }
+        };
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         residentUi = new Control();
@@ -752,8 +763,15 @@ static class Program
 
     static void OnResidentRequest(string mode)
     {
-        var open = openForm;
-        if (open != null) { open.Close(); return; } // hotkey pressed while open: close it
+        var open = openForm as MenuForm;
+        if (open != null)
+        {
+            // Hotkey pressed while open: close it. A second press while it's still appearing
+            // (key repeat, a double tap) is ignored, so the menu doesn't flash open and shut.
+            if (open.IsDisposed || DateTime.Now - open.ShownAt < TimeSpan.FromMilliseconds(300)) return;
+            open.Close();
+            return;
+        }
         ShowResident(mode);
     }
 
