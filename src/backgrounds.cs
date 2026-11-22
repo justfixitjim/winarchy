@@ -43,7 +43,7 @@ static class Backgrounds
         if (Directory.Exists(own))
             foreach (var f in Directory.GetFiles(own).Where(f => Regex.IsMatch(Path.GetExtension(f), @"^\.(jpe?g|png|bmp)$", RegexOptions.IgnoreCase))
                                                    .OrderBy(f => Path.GetFileName(f), StringComparer.CurrentCultureIgnoreCase))
-                list.Add(new Item { Path = f, Name = Path.GetFileNameWithoutExtension(f), Made = true });
+                list.Add(new Item { Path = f, Name = Pretty(Path.GetFileNameWithoutExtension(f)), Made = true });
         // Same size rule as theme.ps1: the main screen in physical pixels, at least 1280x720.
         var b = Screen.PrimaryScreen.Bounds;
         int w = Math.Max(b.Width, 1280), h = Math.Max(b.Height, 720);
@@ -55,6 +55,14 @@ static class Backgrounds
         }
         if (current >= list.Count) current = 0;
         return list;
+    }
+
+    // "03-city-lights_blue" -> "City lights blue" (the number only sets the order).
+    static string Pretty(string name)
+    {
+        string s = Regex.Replace(name, @"^\d+[\s._-]*", "").Replace('-', ' ').Replace('_', ' ').Trim();
+        if (s.Length == 0) return name;
+        return char.ToUpper(s[0]) + s.Substring(1);
     }
 
     // Sets wallpaper number `index`. Returns a status line for the menu.
