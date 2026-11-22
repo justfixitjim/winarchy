@@ -391,3 +391,67 @@ body,
   &:hover { color: var(--wa-accent); }
   .media-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+/* Right side spacing: items about 10px apart instead of 20px. Each clickable item's area
+   reaches 4px into the gap on both sides and lights up on hover, so the gap left between two
+   click areas is small but you can always see which one you're about to click. */
+.right > .agents,
+.right > .tray,
+.right > .vpn,
+.right > .volume,
+.right > .bluetooth,
+.right > .network,
+.right > .stats,
+.right > .battery,
+.right > .weather {
+  margin-right: 2px;
+}
+.right > .tiling-direction,
+.right > .paused-button,
+.right > .binding-mode {
+  margin-right: 8px;
+}
+.right > .agents,
+.right > .vpn,
+.right > .volume > button,
+.right > .bluetooth,
+.right > .network,
+.right > .stats,
+.right > .weather,
+.right > .battery {
+  padding: 3px 4px;
+  border-radius: 3px;
+}
+.right > .agents:hover,
+.right > .vpn:hover,
+.right > .volume > button:hover,
+.right > .bluetooth:hover,
+.right > .network:hover,
+.right > .stats:hover,
+.right > .weather:hover {
+  background: color-mix(in srgb, var(--wa-fg) 10%, transparent);
+}
+/* Icon and label sit 4px apart; stray spaces in the markup (an empty Wi-Fi name) take no room. */
+.right > .vpn,
+.right > .bluetooth,
+.right > .network,
+.right > .battery,
+.right > .weather {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.right > .tray { padding: 0 4px; }
+/* These items space icon and label with `gap`, so drop the icons' general 7px right margin
+   (it left icon-only items such as Bluetooth with a blank tail). */
+.right > .vpn > i,
+.right > .bluetooth > i,
+.right > .network > i,
+.right > .battery > i,
+.right > .weather > i {
+  margin-right: 0;
+}
+/* Volume: its hidden slider still takes the 6px flex gap on the left, and the "62%" label has
+   no padding on the right; even both out to match the other items. */
+.right > .volume { padding-right: 4px; gap: 4px; }
+.right > .volume > button { padding-left: 0; }
