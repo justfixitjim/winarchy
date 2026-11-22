@@ -126,7 +126,7 @@ The installer adds ffmpeg and ImageMagick with winget (`-NoMediaTools` skips the
 
 ## Top bar
 
-The bar sits on the main monitor only (each extra bar costs over 100 MB of memory) and reserves its strip there, so windows tile below it. It always shows workspaces 1-5 (dim when empty), plus any other workspace in use on another monitor (dotted underline). To show it on every monitor, set `"monitorSelection": { "type": "all" }` in `~\.glzr\zebar\winarchy\zpack.json` and raise GlazeWM's top `outer_gap`.
+The bar sits on the main monitor only (each extra bar costs over 100 MB of memory) and reserves its strip there, so windows tile below it. It always shows workspaces 1-5 (dim when empty), plus any workspace with windows on another monitor (dotted underline). To show it on every monitor, set `"monitorSelection": { "type": "all" }` in `~\.glzr\zebar\winarchy\zpack.json` and raise GlazeWM's top `outer_gap`.
 
 - **Windows logo** (top left) opens the winarchy menu, like Omarchy's logo.
 - **AI usage** (Claude Code, Codex): see [AI usage and accounts](#ai-usage-and-accounts).

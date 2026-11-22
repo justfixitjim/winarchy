@@ -438,9 +438,12 @@
       function Workspaces({ wm }) {
         const all = wm.allWorkspaces || wm.currentWorkspaces || [];
         const byName = new Map(all.map(w => [w.name, w]));
-        const names = [...new Set(['1', '2', '3', '4', '5', ...all.map(w => w.name)])]
-          .sort((a, b) => (parseFloat(a) - parseFloat(b)) || a.localeCompare(b));
         const here = wm.currentMonitor?.id;
+        // Another monitor's workspace shows only if it has windows (or focus): each monitor always
+        // keeps one on screen, even an empty one, and that's just noise here.
+        const shown = all.filter(w => w.parentId === here || (w.children || []).length > 0 || w.hasFocus);
+        const names = [...new Set(['1', '2', '3', '4', '5', ...shown.map(w => w.name)])]
+          .sort((a, b) => (parseFloat(a) - parseFloat(b)) || a.localeCompare(b));
         return html`
           <div className="workspaces">
             ${names.map(name => {
