@@ -221,6 +221,30 @@ GlazeWM 3.10.1 has no animations for windows moving, resizing or opening; tiled 
 - winarchy can't add these from outside: GlazeWM positions the windows, and animating them from the daemon would fight it.
 - **Plan:** when a GlazeWM release ships animations, turn them on in `config/glazewm.yaml`, choosing short and subtle defaults with an option to switch them off. Shipping a forked GlazeWM build isn't worth it (unsigned binary, upkeep).
 
+## 8. Today's tasks in the bar, from a Markdown note (planned)
+
+Keep the day's to-dos in view: a line of text in the bar that scrolls sideways through your open tasks, read from an Obsidian note or any Markdown file, with a quick way to add, tick off or change them.
+
+**Source**
+- A Markdown file set in settings.json (`tasksFile`), or a daily-note pattern such as `C:\Vault\Daily\{yyyy-MM-dd}.md` so it follows Obsidian's daily note.
+- Tasks are standard checklist lines: `- [ ] open`, `- [x] done`. Show only the open ones. Optionally only those under a heading (for example `## Today`) or due today (the Obsidian Tasks plugin's `📅 2026-11-22`).
+- Re-read when the file changes (Obsidian, sync or another editor), using a file watcher rather than polling.
+
+**In the bar**
+- A ticker next to the clock (or centre): open tasks one after another, separated by a dot, scrolling slowly. It pauses on hover and shows nothing when there are no tasks.
+- Hover: the full list. Click a task: tick it off (writes `- [x]` back to the file).
+- A toggle to hide it, like the other bar toggles.
+
+**Quick editing, like reminders**
+- A key (and a menu item, Trigger → Tasks) opens a small input: type a task and press Enter to add it. The same panel lists today's tasks to tick off, edit or delete.
+- From a terminal or script: `winarchy task add "call the bank"`, `winarchy task done 2`, `winarchy task list`.
+- Writing to the file must be safe while Obsidian has it open: change only the task lines, keep everything else byte for byte, write atomically (SafeFile), and re-read just before writing so an edit made in Obsidian is never overwritten.
+
+**Open questions**
+- Which file: one fixed note, or the daily note with unfinished tasks carried over from yesterday?
+- Where new tasks go: the end of the file, or under the `## Today` heading?
+- How the ticker moves: a continuous scroll, or one task at a time every few seconds (easier to read, less distracting)?
+
 ---
 
 ## Suggested order
