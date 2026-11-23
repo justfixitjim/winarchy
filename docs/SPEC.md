@@ -219,7 +219,7 @@ GlazeWM 3.10.1 has no animations for windows moving, resizing or opening; tiled 
 
 - Upstream PR [glzr-io/glazewm#1199](https://github.com/glzr-io/glazewm/pull/1199) adds move, resize and open animations. It is open but not merged, and testers report bugs (windows going transparent, the open animation playing on the wrong windows). [glzr-io/glazewm#1392](https://github.com/glzr-io/glazewm/pull/1392) (also workspace-switch slides) was closed.
 - winarchy can't add these from outside: GlazeWM positions the windows, and animating them from the daemon would fight it.
-- **Plan:** when a GlazeWM release ships animations, turn them on in `config/glazewm.yaml`, choosing short and subtle defaults with an option to switch them off. Shipping a forked GlazeWM build isn't worth it (unsigned binary, upkeep).
+- **Plan:** when a GlazeWM release ships animations, turn them on in `config/glazewm.yaml`, choosing short and subtle defaults with an option to switch them off. Forking GlazeWM just for animations isn't worth it (unsigned binary, upkeep); section 10 says when a fork is.
 
 ## 8. Today's tasks in the bar, from a Markdown note (planned)
 
@@ -281,6 +281,20 @@ Short, tactile sound effects for things you do, like a good mechanical keyboard.
 - Sounds must be free to ship with the repo: CC0 (for example from freesound.org, filtered to CC0) or recorded or made for winarchy. Keep a CREDITS file next to them.
 - Settings: `sounds: true|false`, `soundVolume`, and per-event switches in settings.json, plus a toggle in menu → Toggles. A user can swap any sound by dropping a WAV with the same name into `~\.glzr\winarchy\sounds`.
 - Default for new installs: off, with a one-line hint in the README and the Toggles menu, so nobody is surprised by noise at work.
+
+## 10. Working with GlazeWM: on top first, a fork as the last resort
+
+winarchy runs on the official, unmodified GlazeWM release. Everything winarchy adds sits on top of it: GlazeWM's config file, the Zebar widget pack, and winarchy's own helpers, which use GlazeWM's command-line tool and event feed. This keeps GlazeWM updates a drop-in and lets winarchy install onto, and uninstall from, a stock GlazeWM.
+
+The cost is that winarchy can't fix a bug inside GlazeWM; it can only work around it. For example, the daemon restarts GlazeWM when [glzr-io/glazewm#1186](https://github.com/glzr-io/glazewm/issues/1186) traps it in a loop of error boxes. When a GlazeWM bug can't be fixed this way, go down this list:
+
+1. **Work around it on top**, as above, if the workaround is reliable and doesn't fight GlazeWM.
+2. **Fix it upstream:** a pull request to glzr-io/glazewm (Rust), so everyone gets the fix and there's nothing extra to maintain. Watch the issue and drop the workaround once a release has the fix.
+3. **Fork GlazeWM** when a bug still hurts and can't be fixed from outside: there's no reliable workaround and upstream won't take the fix, or won't take it soon enough. The fork fixes the root cause.
+   - Keep the fork small: upstream's code plus our fixes, each also sent upstream as a pull request, so the fork can be dropped once they're merged.
+   - Merge upstream releases into it regularly, and pin the version winarchy installs, as with the MSI hashes today.
+   - Work out signing (an unsigned exe trips SmartScreen and some company policies) and how `install.ps1` and `-User` get the fork instead of the winget package.
+   - Keep the GPL-3.0 license and credit glzr.io.
 
 ---
 
