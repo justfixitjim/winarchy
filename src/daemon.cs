@@ -15,16 +15,18 @@
 //   winarchy-daemon --restore-taskbar  show the taskbar and restore auto-hide (no daemon needed)
 //   winarchy-daemon --awake            toggle "stay awake" (no sleep, no screen off)
 //   winarchy-daemon --nightlight       toggle night light (a warm 4000 K colour filter)
+//   winarchy-daemon --restart-wm       end GlazeWM and start it again
 //
 //  * Bar watchdog - restarts Zebar if it runs without its local web server (the grey bar).
 //  * Reminders  - pops up reminders.json entries (written by `winarchy remind`) when they're due.
 //  * TileGuard  - puts a tiled window back in its tile when the app resizes it (VLC on play).
+//  * WmRescue   - restarts GlazeWM when it's stuck in a loop of "Non-fatal error" boxes.
 //  * Drop-down terminal - Super+` shows / hides Windows Terminal's quake window (opened with
 //                 the title "winarchy-dropdown", which GlazeWM's window rules ignore).
 //
 // Options live in settings.json next to the exe:
 //   { "hideTaskbar": true, "blockStartMenu": true, "autotile": true, "quakeTerminal": true,
-//     "barWatchdog": true, "keepTiles": true, "stayAwake": false, "nightLight": false }
+//     "barWatchdog": true, "keepTiles": true, "wmRescue": true, "stayAwake": false, "nightLight": false }
 //
 // Written for the C# 5 compiler that ships with .NET Framework (no SDK needed).
 
@@ -59,6 +61,13 @@ static class Daemon
         if (arg == "--awake") { Signal(@"Local\winarchy-daemon-awake"); return; }
         if (arg == "--nightlight") { Signal(@"Local\winarchy-daemon-nightlight"); return; }
         if (arg == "--restore-taskbar") { Taskbar.Restore(OriginalAutoHidePath); return; }
+        if (arg == "--restart-wm")
+        {
+            // The running daemon does it if there is one (it may have rights this caller lacks).
+            EventWaitHandle ev;
+            if (EventWaitHandle.TryOpenExisting(@"Local\winarchy-daemon-restartwm", out ev)) ev.Set(); else WmRescue.Restart();
+            return;
+        }
 
         bool created;
         using (new Mutex(true, @"Local\winarchy-daemon", out created))
@@ -114,6 +123,10 @@ static class Daemon
             }
 
             if (Flag("keepTiles", true)) TileGuard.Start(); // hook runs on this (UI) thread's message loop
+
+            WmRescue.Notify = text => { try { ui.BeginInvoke((MethodInvoker)delegate { Reminders.Show(text, "winarchy"); }); } catch { } };
+            if (Flag("wmRescue", true)) WmRescue.Start();
+            OnEvent(@"Local\winarchy-daemon-restartwm", delegate { ThreadPool.QueueUserWorkItem(_ => WmRescue.Restart()); });
 
             Application.Run();
         }
@@ -941,7 +954,8 @@ static class Reminders
         return ColorTranslator.FromHtml(fallback);
     }
 
-    public static void Show(string text)
+    // `heading` replaces "Reminder" (the daemon uses this for its own notices).
+    public static void Show(string text, string heading = null)
     {
         Dictionary<string, object> theme = null;
         try
@@ -972,7 +986,7 @@ static class Reminders
         var inner = new Panel { Dock = DockStyle.Fill, BackColor = bg, Padding = new Padding(pad, (int)(10 * scale), pad, (int)(8 * scale)) };
         var font = new Font("JetBrainsMono NFM", 10f);
         if (font.Name != "JetBrainsMono NFM") font = new Font("Consolas", 10f);
-        var title = new Label { Dock = DockStyle.Top, AutoSize = false, Height = (int)(20 * scale), ForeColor = accent, Font = font, Text = "Reminder  " + DateTime.Now.ToString("t") };
+        var title = new Label { Dock = DockStyle.Top, AutoSize = false, Height = (int)(20 * scale), ForeColor = accent, Font = font, Text = (heading ?? "Reminder") + "  " + DateTime.Now.ToString("t") };
         var body = new Label { Dock = DockStyle.Fill, ForeColor = fg, Font = font, Text = text, AutoEllipsis = true };
         var hint = new Label { Dock = DockStyle.Bottom, AutoSize = false, Height = (int)(16 * scale), ForeColor = muted, Font = new Font(font.FontFamily, 8f), Text = "click to dismiss" };
         inner.Controls.Add(body);
@@ -985,6 +999,89 @@ static class Reminders
         shown++;
         form.Show();
         System.Media.SystemSounds.Exclamation.Play();
+    }
+}
+
+// GlazeWM rescue. GlazeWM can lose track of a window (glzr-io/glazewm#1186, often set off by apps
+// like Discord or Steam). After that every layout pass fails, and each failure opens a "Non-fatal
+// error" box; while one is open GlazeWM does nothing else, and clicking OK just brings the next.
+// Only a restart clears it. Every 3 seconds this reads what GlazeWM added to its errors.log; when
+// the same error turns up 3 times within a minute AND GlazeWM has stopped answering, it ends
+// GlazeWM and starts it again (at most once every 5 minutes), then says so in a small notice.
+// A hard restart keeps every window: GlazeWM picks them all up again when it starts.
+static class WmRescue
+{
+    static readonly string Log = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\.glzr\glazewm\errors.log");
+    static readonly List<KeyValuePair<DateTime, string>> recent = new List<KeyValuePair<DateTime, string>>();
+    static System.Threading.Timer timer;
+    static long pos = -1;
+    static int busy;
+    static DateTime lastRestart = DateTime.MinValue;
+    public static Action<string> Notify; // shows a notice on the UI thread
+
+    public static void Start()
+    {
+        timer = new System.Threading.Timer(Check, null, 3000, 3000);
+    }
+
+    static void Check(object state)
+    {
+        if (Interlocked.Exchange(ref busy, 1) == 1) return;
+        try
+        {
+            if (!File.Exists(Log)) return;
+            string added;
+            using (var fs = new FileStream(Log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                if (pos < 0 || fs.Length < pos) pos = fs.Length; // first look, or the log was cleared: only new lines count
+                if (fs.Length == pos) return;
+                fs.Seek(pos, SeekOrigin.Begin);
+                var bytes = new byte[Math.Min(fs.Length - pos, 1 << 20)];
+                int n = fs.Read(bytes, 0, bytes.Length);
+                pos += n;
+                added = Encoding.UTF8.GetString(bytes, 0, n);
+            }
+            var now = DateTime.Now;
+            foreach (var raw in added.Split('\n'))
+            {
+                // "<time> ERROR glazewm: <message>", with colour codes.
+                string line = System.Text.RegularExpressions.Regex.Replace(raw, @"\x1b\[[0-9;]*m", "").Trim();
+                var m = System.Text.RegularExpressions.Regex.Match(line, @"(?:^|\s)ERROR\s+(?:\S+:\s+)?(.+)$");
+                if (m.Success) recent.Add(new KeyValuePair<DateTime, string>(now, m.Groups[1].Value.Trim()));
+            }
+            recent.RemoveAll(e => now - e.Key > TimeSpan.FromMinutes(1));
+            bool looping = false;
+            foreach (var e in recent)
+                if (recent.FindAll(x => x.Value == e.Value).Count >= 3) { looping = true; break; }
+            if (!looping || now - lastRestart < TimeSpan.FromMinutes(5)) return;
+            // Repeated errors from a GlazeWM that still answers aren't a stuck one.
+            if (WorkspaceTidy.Glaze("query focused").Length > 0) return;
+            lastRestart = now;
+            recent.Clear();
+            if (Restart() && Notify != null)
+                Notify("GlazeWM got stuck in a loop of error boxes, so it was restarted. Your windows are still open.");
+        }
+        catch { }
+        finally { Interlocked.Exchange(ref busy, 0); }
+    }
+
+    // Ends GlazeWM (and any of its command-line calls waiting on it) and starts it again.
+    // GlazeWM's own start-up commands then find the bar, this daemon and the menu already running.
+    public static bool Restart()
+    {
+        try
+        {
+            var procs = System.Diagnostics.Process.GetProcessesByName("glazewm");
+            foreach (var p in procs) { try { p.Kill(); } catch { } }
+            foreach (var p in procs) { try { p.WaitForExit(5000); } catch { } p.Dispose(); }
+            Thread.Sleep(1500);
+            var left = System.Diagnostics.Process.GetProcessesByName("glazewm");
+            foreach (var p in left) p.Dispose();
+            if (left.Length > 0) return false; // couldn't end it
+            using (System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Glzr.GlazeExe) { UseShellExecute = true })) { }
+            return true;
+        }
+        catch { return false; }
     }
 }
 

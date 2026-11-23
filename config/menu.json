@@ -755,8 +755,8 @@
             "items": [
               {
                 "label": "Restart GlazeWM",
-                "run": "cmd.exe",
-                "args": "/c \"\"{glazewm-cli}\" command wm-exit & timeout /t 2 /nobreak >nul & start \"\" \"{glazewm}\"\""
+                "run": "{dir}\\winarchy-daemon.exe",
+                "args": "--restart-wm"
               },
               {
                 "label": "Reload GlazeWM config",
