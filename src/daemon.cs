@@ -603,11 +603,18 @@ static class WorkspaceTidy
         {
             CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8
         };
+        // GlazeWM stops answering while one of its error boxes is open (until OK is clicked), and
+        // the CLI then waits forever. Give up after 5 seconds so the daemon's checks keep running.
         using (var p = System.Diagnostics.Process.Start(psi))
         {
-            string output = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(5000);
-            return output;
+            var read = p.StandardOutput.ReadToEndAsync();
+            if (!read.Wait(5000))
+            {
+                try { p.Kill(); } catch { }
+                return "";
+            }
+            p.WaitForExit(1000);
+            return read.Result;
         }
     }
 

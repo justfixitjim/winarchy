@@ -952,7 +952,10 @@ static class Program
             };
             using (var p = Process.Start(psi))
             {
-                string json = p.StandardOutput.ReadToEnd();
+                // GlazeWM doesn't answer while one of its error boxes is open: don't wait forever.
+                var read = p.StandardOutput.ReadToEndAsync();
+                if (!read.Wait(3000)) { try { p.Kill(); } catch { } return found; }
+                string json = read.Result;
                 p.WaitForExit(2000);
                 var top = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(json) as Dictionary<string, object>;
                 var data = top["data"] as Dictionary<string, object>;
