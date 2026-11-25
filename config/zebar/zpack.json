@@ -51,7 +51,7 @@
           },
           {
             "program": "powershell.exe",
-            "argsRegex": ".*agents\\.ps1 usage$"
+            "argsRegex": "^{{AGENTS_ARGS_RE}} usage$"
           },
           {
             "program": "cmd.exe",
@@ -63,7 +63,7 @@
           },
           {
             "program": "powershell.exe",
-            "argsRegex": ".*bluetooth\\.ps1 info$"
+            "argsRegex": "^{{BLUETOOTH_ARGS_RE}} info$"
           },
           {
             "program": "cmd.exe",
@@ -111,7 +111,7 @@
         "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": ".*agents\\.ps1 (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|prefer (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex)|switching on)$"
+            "argsRegex": "^{{AGENTS_ARGS_RE}} (usage( -Refresh)?|use (claude|codex) [A-Za-z0-9_-]+|prefer (claude|codex) [A-Za-z0-9_-]+|mode (claude|codex) (auto|manual) \\d+|add (claude|codex)|switching on)$"
           },
           {
             "program": "cmd.exe",
@@ -159,7 +159,7 @@
         "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": ".*network\\.ps1 (info|public|password|wifi (on|off)|adapter \\d+ (on|off))$"
+            "argsRegex": "^{{NETWORK_ARGS_RE}} (info|public|password|wifi (on|off)|adapter \\d+ (on|off))$"
           },
           {
             "program": "cmd.exe",
@@ -394,7 +394,7 @@
         "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": ".*bluetooth\\.ps1 (info|radio (on|off))$"
+            "argsRegex": "^{{BLUETOOTH_ARGS_RE}} (info|radio (on|off))$"
           },
           {
             "program": "cmd.exe",

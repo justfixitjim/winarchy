@@ -80,13 +80,19 @@ if (Test-Path $zebarSettings) {
 $pack = Join-Path $zebarDir 'winarchy'
 if (Test-Path $pack) { Remove-Item $pack -Recurse -Force }
 
+# The agents.ps1 next to this script if there is one: an older installed copy may not know `restore`.
 $agentsScript = Join-Path $dest 'tools\agents.ps1'
+if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot 'tools\agents.ps1'))) { $agentsScript = Join-Path $PSScriptRoot 'tools\agents.ps1' }
 $agentsState = Join-Path $dest 'agents'
-if ((Test-Path $agentsScript) -and (Test-Path $agentsState)) {
+$keepAgents = $false
+if (Test-Path $agentsState) {
     # Put the main Claude and Codex accounts back in ~\.claude and ~\.codex; extra accounts' sign-ins are removed.
     Step 'Switching Claude Code and Codex back to their main accounts'
-    foreach ($p in 'claude', 'codex') {
-        if (Test-Path (Join-Path $agentsState "$p.json")) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $agentsScript use $p main }
+    # (`restore` works whether account switching is on or off.)
+    if (Test-Path $agentsScript) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $agentsScript restore }
+    if (-not (Test-Path $agentsScript) -or $LASTEXITCODE) {
+        # Without extra accounts nothing was ever moved, so there's nothing to lose.
+        $keepAgents = Test-Path (Join-Path $agentsState 'claude')
     }
 }
 if ([Environment]::GetEnvironmentVariable('CODEX_HOME', 'User') -like "$agentsState*") { [Environment]::SetEnvironmentVariable('CODEX_HOME', $null, 'User') }
@@ -98,7 +104,10 @@ if (Test-Path $themeScript) {
 }
 
 Step "Removing $dest"
-if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+if ($keepAgents) {
+    Get-ChildItem $dest -Force | Where-Object { $_.Name -ne 'agents' } | Remove-Item -Recurse -Force
+    Write-Warning "The main account's sign-in could not be put back, so saved sign-ins were kept in $agentsState. Check you can sign in (claude auth login), then delete that folder."
+} elseif (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
 $cache = Join-Path $env:LOCALAPPDATA 'winarchy'
 if (Test-Path $cache) { Remove-Item $cache -Recurse -Force }
 

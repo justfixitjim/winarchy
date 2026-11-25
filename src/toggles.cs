@@ -121,7 +121,7 @@ static class Toggles
             }
             // Merge into settings.json, which winarchy-daemon and theme.ps1 also use.
             string path = SettingsPath(dir);
-            SafeFile.Locked(path, delegate
+            try { SafeFile.Locked(path, delegate
             {
                 var json = new JavaScriptSerializer();
                 Dictionary<string, object> s = null;
@@ -132,7 +132,8 @@ static class Toggles
                 int i = 0;
                 foreach (var kv in s) sb.Append("  " + json.Serialize(kv.Key) + ": " + json.Serialize(kv.Value) + (++i < s.Count ? ",\n" : "\n"));
                 SafeFile.Write(path, sb.Append("}\n").ToString());
-            });
+            }); }
+            catch (TimeoutException e) { MessageBox.Show(e.Message + " Try again.", "winarchy"); }
             return;
         }
         string command = DefaultAgent(dir);
@@ -217,7 +218,8 @@ static class Toggles
         }
         // winarchy-daemon also rewrites this file (it drops reminders once they've popped up).
         string path = Path.Combine(dir, "reminders.json");
-        SafeFile.Locked(path, delegate { ChangeReminders(path, verb, add, minutes, args); });
+        try { SafeFile.Locked(path, delegate { ChangeReminders(path, verb, add, minutes, args); }); }
+        catch (TimeoutException e) { MessageBox.Show(e.Message + " Try again.", "winarchy"); }
     }
 
     static void ChangeReminders(string path, string verb, bool add, double minutes, string[] args)

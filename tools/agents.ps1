@@ -6,6 +6,7 @@
 #   agents.ps1 use <claude|codex> [id|next] new sessions use that account
 #   agents.ps1 list [claude|codex]
 #   agents.ps1 remove <claude|codex> <id>
+#   agents.ps1 restore                     put the main accounts back (uninstall; works with switching off)
 #   agents.ps1 mode <claude|codex> <manual|auto> [threshold]
 #   agents.ps1 prefer <claude|codex> <id>  the account to be on; auto-switch returns to it
 #                                          once its limits reset
@@ -55,6 +56,26 @@ $refreshMinutes = 4
 
 function Read-Text($p) { [IO.File]::ReadAllText($p, $utf8) }
 function Write-Text($p, $t) { [IO.File]::WriteAllText($p, $t, $utf8) }
+# Replaces a file in one step: a reader, or a crash, never sees half of it.
+function Write-Whole($p, $t) {
+    $tmp = "$p.$([guid]::NewGuid().ToString('N')).tmp"
+    try {
+        Write-Text $tmp $t
+        for ($i = 0; ; $i++) {
+            try { if (Test-Path $p) { [IO.File]::Replace($tmp, $p, [NullString]::Value) } else { [IO.File]::Move($tmp, $p) }; return }
+            catch { if ($i -ge 4) { throw }; Start-Sleep -Milliseconds 40 }   # a reader has it open
+        }
+    } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+}
+# One change to the accounts at a time (the bar's auto-switch, the menu, the panel and a sign-in
+# window are separate processes). Throws, changing nothing, if another one keeps the lock. Nests.
+$script:accountLock = New-Object Threading.Mutex($false, 'Local\winarchy-agents-accounts')
+function Invoke-Locked([scriptblock]$Action) {
+    $gotLock = $false
+    try { $gotLock = $script:accountLock.WaitOne(30000) } catch [Threading.AbandonedMutexException] { $gotLock = $true }
+    if (-not $gotLock) { throw 'Another account change is still running. Try again in a moment.' }
+    try { & $Action } finally { $script:accountLock.ReleaseMutex() }
+}
 # Claude's own files go through a case-sensitive parser and are changed one key at a time.
 $script:ser = $null
 function Get-Serializer {
@@ -100,15 +121,14 @@ function Set-Switching([bool]$on) {
     $lock = New-Object Threading.Mutex($false, 'Local\winarchy-file-settings.json')
     $have = $false
     try { $have = $lock.WaitOne(3000) } catch [Threading.AbandonedMutexException] { $have = $true }
+    if (-not $have) { throw 'settings.json is being changed by another winarchy program. Try again.' }
     try {
         $s = Read-Dict $settingsFile
         if (-not $s) { $s = New-Object 'Collections.Generic.Dictionary[string,object]' }
         $s['accountSwitching'] = $on
         $lines = foreach ($k in @($s.Keys)) { '  ' + (Get-Serializer).Serialize($k) + ': ' + (Get-Serializer).Serialize($s[$k]) }
-        $tmp = "$settingsFile.tmp"
-        Write-Text $tmp ("{`n" + ($lines -join ",`n") + "`n}`n")
-        if (Test-Path $settingsFile) { [IO.File]::Replace($tmp, $settingsFile, [NullString]::Value) } else { Move-Item $tmp $settingsFile }
-    } finally { if ($have) { $lock.ReleaseMutex() } }
+        Write-Whole $settingsFile ("{`n" + ($lines -join ",`n") + "`n}`n")
+    } finally { $lock.ReleaseMutex() }
     Remove-Item $usagePath -ErrorAction SilentlyContinue
 }
 function Assert-Switching {
@@ -119,7 +139,7 @@ function Assert-Switching {
 
 # --- Registry: which accounts exist, which one is active, how switching works -------------
 function Registry-Path($prov) { Join-Path $stateDir "$prov.json" }
-function Save-Registry($prov, $reg) { Write-Text (Registry-Path $prov) (($reg | ConvertTo-Json -Depth 6) + "`n") }
+function Save-Registry($prov, $reg) { Write-Whole (Registry-Path $prov) (($reg | ConvertTo-Json -Depth 6) + "`n") }
 function Load-Registry($prov) {
     $p = Registry-Path $prov
     if (Test-Path $p) {
@@ -185,7 +205,10 @@ function Get-Identity($prov, $dir, [bool]$isPrimary = $false) {
 }
 
 # --- Usage ---------------------------------------------------------------------------------
-function Get-ClaudeUsage($dir) {
+# Reads an account's Claude sign-in, refreshing it if it expired. Call under the lock: refreshing a
+# sign-in while a switch copies it would leave the copy with a dead refresh token.
+function Get-ClaudeSignIn($acct) {
+    $dir = Login-Dir 'claude' (Load-Registry 'claude') $acct
     $credPath = Join-Path $dir '.credentials.json'
     $creds = Read-Dict $credPath
     $o = if ($creds) { $creds['claudeAiOauth'] } else { $null }
@@ -205,6 +228,13 @@ function Get-ClaudeUsage($dir) {
             return @{ status = 'Sign-in expired: run claude auth login' }
         }
     }
+    return @{ status = 'ok'; oauth = $o }
+}
+
+function Get-ClaudeUsage($acct) {
+    $signIn = Invoke-Locked { Get-ClaudeSignIn $acct }
+    if ($signIn.status -ne 'ok') { return $signIn }
+    $o = $signIn.oauth
     try {
         $r = Invoke-RestMethod -Uri 'https://api.anthropic.com/api/oauth/usage' -TimeoutSec 15 -Headers @{
             Authorization = 'Bearer ' + $o['accessToken']; 'anthropic-beta' = 'oauth-2025-04-20'; Accept = 'application/json'
@@ -316,8 +346,7 @@ function Update-Usage {
         $reg = Load-Registry $prov
         $prevProv = if ($old) { $old.providers | Where-Object { $_.id -eq $prov } } else { $null }
         $accounts = foreach ($acct in $reg.accounts) {
-            $dir = Login-Dir $prov $reg $acct
-            $u = try { if ($prov -eq 'claude') { Get-ClaudeUsage $dir } else { Get-CodexUsage $dir } } catch { @{ status = "Error: $($_.Exception.Message)" } }
+            $u = try { if ($prov -eq 'claude') { Get-ClaudeUsage $acct } else { Get-CodexUsage (Login-Dir $prov $reg $acct) } } catch { @{ status = "Error: $($_.Exception.Message)" } }
             $prev = if ($prevProv) { $prevProv.accounts | Where-Object { $_.id -eq $acct.id } } else { $null }
             $rec = [ordered]@{ id = $acct.id; label = $acct.label; active = ($acct.id -eq $reg.active); preferred = ($acct.id -eq $reg.preferred); status = $u.status; stale = $false
                 plan = $(if ($u.plan) { $u.plan } elseif ($prev) { $prev.plan } else { '' }); session = $u.session; weekly = $u.weekly }
@@ -329,7 +358,12 @@ function Update-Usage {
             [pscustomobject]$rec
         }
         $result.providers += [pscustomobject][ordered]@{ id = $prov; name = $names[$prov]; mode = $reg.mode; threshold = $reg.threshold; active = $reg.active; accounts = @($accounts) }
-        if ($result.switching) { Invoke-AutoSwitch $prov $reg @($accounts) }
+        # Checking usage takes a while, and the accounts may have been switched meanwhile: decide on
+        # (and save) the registry as it is now, never the copy read above.
+        if ($result.switching) {
+            try { Invoke-Locked { if (Test-Switching) { Invoke-AutoSwitch $prov (Load-Registry $prov) @($accounts) } } }
+            catch { Show-Toast "$($names[$prov]) could not switch accounts" $_.Exception.Message }
+        }
     }
     Write-Text $usagePath (($result | ConvertTo-Json -Depth 8 -Compress) + "`n")
     return $result
@@ -353,7 +387,7 @@ function Invoke-AutoSwitch($prov, $reg, $accounts) {
         if ($reg.alert) { $reg.alert = ''; Save-Registry $prov $reg }
         return
     }
-    $target = $accounts | Where-Object { $_.id -ne $reg.active -and $null -ne $_.peak -and $_.peak -lt $reg.threshold } |
+    $target = $accounts | Where-Object { $_.id -ne $reg.active -and (Find-Account $reg $_.id) -and $null -ne $_.peak -and $_.peak -lt $reg.threshold } |
         Sort-Object peak | Select-Object -First 1
     $key = if ($target) { "$($reg.mode):$($cur.id):$($target.id)" } else { "exhausted:$($cur.id)" }
     if ($reg.alert -eq $key) { return }
@@ -383,8 +417,23 @@ function Move-ClaudeLogin($fromDir, $toDir) {
     Write-Dict $toProfPath $toProf
 }
 
+# A switch that was cut short (the process was ended midway) left its backup behind. Once the
+# registry says the switch happened, only the tidying is missing; before that, undo it.
+function Repair-ClaudeSwap($reg) {
+    $bak = Join-Path $stateDir 'claude-swap'
+    if (-not (Test-Path $bak)) { return }
+    $swap = Read-Dict (Join-Path $bak 'swap.json')   # written once the backup is whole; without it nothing was moved
+    if ($swap) {
+        if ($reg.seated -eq $swap['to']) { Remove-Item (Join-Path (Park-Dir 'claude' $swap['to']) '.credentials.json') -ErrorAction SilentlyContinue }
+        elseif ($reg.seated -eq $swap['from']) { Move-ClaudeLogin $bak $claudePrimary }
+        else { throw "An interrupted account switch left $bak in an unexpected state. Nothing was changed." }
+    }
+    Remove-Item $bak -Recurse -Force
+}
+
 function Use-Account($prov, $target, [switch]$Quiet, [switch]$Auto) {
     $reg = Load-Registry $prov
+    if ($prov -eq 'claude') { Repair-ClaudeSwap $reg }
     if (-not $target -or $target -eq 'next') {
         $i = [array]::IndexOf(@($reg.accounts.id), $reg.active)
         $target = $reg.accounts[($i + 1) % $reg.accounts.Count].id
@@ -399,16 +448,21 @@ function Use-Account($prov, $target, [switch]$Quiet, [switch]$Auto) {
         # Park the seated login, seat the target, then drop the target's old copy: a refresh
         # token works once, so a login is only ever kept in one place.
         Move-ClaudeLogin $claudePrimary $bak
+        Write-Text (Join-Path $bak 'swap.json') "{`"from`":`"$($reg.seated)`",`"to`":`"$($acct.id)`"}"
+        $was = $reg.seated
         try {
             Move-ClaudeLogin $claudePrimary $park
             Move-ClaudeLogin $src $claudePrimary
+            $reg.seated = $acct.id
+            Save-Registry 'claude' $reg   # the switch counts from here
         } catch {
+            $reg.seated = $was
             Move-ClaudeLogin $bak $claudePrimary
+            Remove-Item $bak -Recurse -Force -ErrorAction SilentlyContinue
             throw
         }
         Remove-Item (Join-Path $src '.credentials.json') -ErrorAction SilentlyContinue
         Remove-Item $bak -Recurse -Force -ErrorAction SilentlyContinue
-        $reg.seated = $acct.id
     }
     if ($prov -eq 'codex') {
         $value = if ($acct.primary) { $null } else { Park-Dir 'codex' $acct.id }
@@ -546,42 +600,56 @@ switch ($Command) {
         Show-Toast "AI account switching $Provider" $(if ($Provider -eq 'on') { 'Add accounts in the AI panel or menu > AI.' } else { 'Logins stay where they are now.' })
     }
     'add' { Assert-Provider; if (Assert-Switching) { Add-Account $Provider } }
-    'finish' { Assert-Provider; Complete-SignIn $Provider $Arg1 }
-    'use' { Assert-Provider; if (Assert-Switching) { Use-Account $Provider $Arg1; Remove-Item $usagePath -ErrorAction SilentlyContinue } }
-    'remove' { Assert-Provider; Remove-Account $Provider $Arg1 }
+    'finish' { Assert-Provider; Invoke-Locked { Complete-SignIn $Provider $Arg1 } }
+    'use' { Assert-Provider; if (Assert-Switching) { Invoke-Locked { Use-Account $Provider $Arg1 }; Remove-Item $usagePath -ErrorAction SilentlyContinue } }
+    'remove' { Assert-Provider; Invoke-Locked { Remove-Account $Provider $Arg1 } }
+    'restore' {
+        foreach ($prov in 'codex', 'claude') {
+            if (-not (Test-Path (Registry-Path $prov))) { continue }
+            Invoke-Locked {
+                $reg = Load-Registry $prov
+                if ($prov -eq 'claude') { Repair-ClaudeSwap $reg }
+                if ($reg.active -ne 'main' -or $reg.seated -ne 'main') { Use-Account $prov 'main' -Quiet }
+            }
+        }
+    }
     'prefer' {
         Assert-Provider
         if (-not (Assert-Switching)) { return }
-        $reg = Load-Registry $Provider
-        $acct = Find-Account $reg $Arg1
-        if (-not $acct) { throw "No $($names[$Provider]) account '$Arg1'." }
-        $reg.preferred = $acct.id
-        Save-Registry $Provider $reg
-        # Move to it now if it has room; otherwise come back to it when its limits reset.
-        $peak = $null
-        if (Test-Path $usagePath) {
-            $u = Read-Text $usagePath | ConvertFrom-Json
-            $rec = (($u.providers | Where-Object { $_.id -eq $Provider }).accounts | Where-Object { $_.id -eq $acct.id })
-            if ($rec) { $peak = Get-Peak $rec }
+        Invoke-Locked {
+            $reg = Load-Registry $Provider
+            $acct = Find-Account $reg $Arg1
+            if (-not $acct) { throw "No $($names[$Provider]) account '$Arg1'." }
+            $reg.preferred = $acct.id
+            Save-Registry $Provider $reg
+            # Move to it now if it has room; otherwise come back to it when its limits reset.
+            $peak = $null
+            if (Test-Path $usagePath) {
+                $u = Read-Text $usagePath | ConvertFrom-Json
+                $rec = (($u.providers | Where-Object { $_.id -eq $Provider }).accounts | Where-Object { $_.id -eq $acct.id })
+                if ($rec) { $peak = Get-Peak $rec }
+            }
+            if ($reg.active -eq $acct.id) { Show-Toast "$($names[$Provider]) preferred account" "$($acct.label)." }
+            elseif ($null -eq $peak -or $peak -lt $reg.threshold) { Use-Account $Provider $acct.id }
+            else {
+                $reg = Load-Registry $Provider; $reg.autoAway = $true; Save-Registry $Provider $reg
+                Show-Toast "$($names[$Provider]) preferred account: $($acct.label)" "It's at $([int]$peak)%, so you stay on the current account until it resets."
+            }
+            Remove-Item $usagePath -ErrorAction SilentlyContinue
         }
-        if ($reg.active -eq $acct.id) { Show-Toast "$($names[$Provider]) preferred account" "$($acct.label)." }
-        elseif ($null -eq $peak -or $peak -lt $reg.threshold) { Use-Account $Provider $acct.id }
-        else {
-            $reg = Load-Registry $Provider; $reg.autoAway = $true; Save-Registry $Provider $reg
-            Show-Toast "$($names[$Provider]) preferred account: $($acct.label)" "It's at $([int]$peak)%, so you stay on the current account until it resets."
-        }
-        Remove-Item $usagePath -ErrorAction SilentlyContinue
     }
     'mode' {
         Assert-Provider
         if (-not (Assert-Switching)) { return }
-        $reg = Load-Registry $Provider
-        if ($Arg1) { if ($Arg1 -notin 'manual', 'auto') { throw 'Mode is manual or auto.' }; $reg.mode = $Arg1 }
-        if ($Arg2) { $reg.threshold = [int]$Arg2 }
-        $reg.alert = ''
-        Save-Registry $Provider $reg
-        $msg = if ($reg.mode -eq 'auto') { "switches new sessions to the account with the most headroom at $($reg.threshold)%." } else { "notifies at $($reg.threshold)% and switches when you say so." }
-        Show-Toast "$($names[$Provider]) accounts" "$($names[$Provider]) $msg"
+        Invoke-Locked {
+            $reg = Load-Registry $Provider
+            if ($Arg1) { if ($Arg1 -notin 'manual', 'auto') { throw 'Mode is manual or auto.' }; $reg.mode = $Arg1 }
+            if ($Arg2) { $reg.threshold = [int]$Arg2 }
+            $reg.alert = ''
+            Save-Registry $Provider $reg
+            $msg = if ($reg.mode -eq 'auto') { "switches new sessions to the account with the most headroom at $($reg.threshold)%." } else { "notifies at $($reg.threshold)% and switches when you say so." }
+            Show-Toast "$($names[$Provider]) accounts" "$($names[$Provider]) $msg"
+        }
     }
-    default { throw "Unknown command '$Command'. Commands: usage, status, add, use, prefer, list, remove, mode, switching." }
+    default { throw "Unknown command '$Command'. Commands: usage, status, add, use, prefer, list, remove, restore, mode, switching." }
 }

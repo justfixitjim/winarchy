@@ -83,7 +83,7 @@ static class Backgrounds
             using (Process.Start(psi)) { }
             return status + " (drawing it...)";
         }
-        SafeFile.Locked(ThemeJson, () =>
+        try { SafeFile.Locked(ThemeJson, () =>
         {
             string text = SafeFile.Read(ThemeJson);
             if (text == null) return;
@@ -91,7 +91,8 @@ static class Backgrounds
                 ? Regex.Replace(text, "(\"background\"\\s*:\\s*)\\d+", "${1}" + index)
                 : text;
             if (updated != text) SafeFile.Write(ThemeJson, updated);
-        });
+        }); }
+        catch (TimeoutException) { return "Couldn't change the background just now. Try again."; }
         // Fill the screen, like theme.ps1. Windows tells every window about the change, which can
         // take a moment, so that happens off the menu's thread.
         string path = item.Path;

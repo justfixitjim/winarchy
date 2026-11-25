@@ -224,7 +224,9 @@ if (-not $SkipApps) {
         }
     }
 }
+# Both are required: without Zebar the taskbar would be hidden with no bar in its place. Only apps have been installed so far.
 if (-not (Test-Path $glazeExe)) { throw "GlazeWM is not installed at $glazeExe. Re-run without -SkipApps." }
+if (-not (Test-Path $zebarExe)) { throw "Zebar (the bar) is not installed at $zebarExe. Re-run without -SkipApps, or install it yourself: winget install glzr-io.zebar" }
 
 # --- 2. Stop anything already running -----------------------------------------------
 Step 'Stopping running winarchy / GlazeWM'
@@ -391,6 +393,12 @@ $paths = [ordered]@{
     '{{AGENTS_PS1}}'    = (Join-Path $toolsDir 'agents.ps1')
     '{{NETWORK_PS1}}'   = (Join-Path $toolsDir 'network.ps1')
     '{{BLUETOOTH_PS1}}' = (Join-Path $toolsDir 'bluetooth.ps1')
+}
+# zpack.json also pins the whole PowerShell command line the pages use (PS / -File in the pages), so
+# a page can run these scripts and nothing else. Escaped here for zpack's regex, below for JSON.
+foreach ($name in 'AGENTS', 'NETWORK', 'BLUETOOTH') {
+    $cmdLine = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ' + $paths["{{${name}_PS1}}"]
+    $paths["{{${name}_ARGS_RE}}"] = $cmdLine -replace '([\\.+*?()|\[\]{}^$])', '\$1'
 }
 foreach ($page in Get-ChildItem $pack -Filter *.html) {
     $text = [IO.File]::ReadAllText($page.FullName)

@@ -10,6 +10,7 @@ using System.Threading;
 static class SafeFile
 {
     // Runs `change` while holding a lock named after the file, shared by every winarchy program.
+    // Throws TimeoutException, without running it, if another program keeps the lock.
     public static void Locked(string path, Action change)
     {
         using (var m = new Mutex(false, @"Local\winarchy-file-" + Path.GetFileName(path).ToLowerInvariant()))
@@ -17,8 +18,9 @@ static class SafeFile
             bool have;
             try { have = m.WaitOne(3000); }
             catch (AbandonedMutexException) { have = true; } // the last holder crashed; the file is still whole
+            if (!have) throw new TimeoutException(Path.GetFileName(path) + " is being changed by another winarchy program.");
             try { change(); }
-            finally { if (have) m.ReleaseMutex(); }
+            finally { m.ReleaseMutex(); }
         }
     }
 
@@ -36,20 +38,23 @@ static class SafeFile
     // without allowing that, try a few times, then write in place.
     public static void Write(string path, string text)
     {
-        string tmp = path + ".tmp";
-        File.WriteAllText(tmp, text, new UTF8Encoding(false));
-        for (int i = 0; i < 5; i++)
+        string tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp"; // never shared with another writer
+        try
         {
-            try
+            File.WriteAllText(tmp, text, new UTF8Encoding(false));
+            for (int i = 0; i < 5; i++)
             {
-                if (File.Exists(path)) File.Replace(tmp, path, null, true);
-                else File.Move(tmp, path);
-                return;
+                try
+                {
+                    if (File.Exists(path)) File.Replace(tmp, path, null, true);
+                    else File.Move(tmp, path);
+                    return;
+                }
+                catch (IOException) { Thread.Sleep(40); }
+                catch (UnauthorizedAccessException) { Thread.Sleep(40); }
             }
-            catch (IOException) { Thread.Sleep(40); }
-            catch (UnauthorizedAccessException) { Thread.Sleep(40); }
+            File.WriteAllText(path, text, new UTF8Encoding(false));
         }
-        File.WriteAllText(path, text, new UTF8Encoding(false));
-        try { File.Delete(tmp); } catch { }
+        finally { try { File.Delete(tmp); } catch { } }
     }
 }

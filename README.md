@@ -304,6 +304,7 @@ The helpers are built on your PC from the source in `src\`, so they're unsigned,
 
 ## Notes
 
+- **Testing account switching:** `.	estsgents.ps1` checks switching, restoring and interrupted switches with made-up sign-ins in a temporary folder.
 - **Trying a change on a clean PC:** `.\tests\sandbox\start.ps1` installs winarchy in Windows Sandbox, checks it, uninstalls it and checks again, writing `tests\sandbox\results\report.txt`. Add `-Ref v0.1.0` to test a release the way users get it.
 
 - GlazeWM 3.10.1 can't parse quoted program paths in `shell-exec`, so the config writes paths unquoted. Spaces in them are fine.

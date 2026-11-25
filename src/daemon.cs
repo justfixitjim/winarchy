@@ -174,7 +174,7 @@ static class Daemon
     // write settings.json too, so it's re-read and saved under the shared file lock.
     static bool ToggleSetting(string key, bool fallback)
     {
-        bool on = !fallback;
+        bool on = Flag(key, fallback); // stays as it is if the lock can't be had
         try
         {
             SafeFile.Locked(SettingsPath, delegate
@@ -1016,7 +1016,8 @@ static class WmRescue
     static System.Threading.Timer timer;
     static long pos = -1;
     static int busy;
-    static DateTime lastRestart = DateTime.MinValue;
+    static DateTime lastRestart = DateTime.MinValue; // set by manual restarts too; only touched while holding restartLock
+    static readonly object restartLock = new object();
     public static Action<string> Notify; // shows a notice on the UI thread
 
     public static void Start()
@@ -1053,12 +1054,14 @@ static class WmRescue
             bool looping = false;
             foreach (var e in recent)
                 if (recent.FindAll(x => x.Value == e.Value).Count >= 3) { looping = true; break; }
-            if (!looping || now - lastRestart < TimeSpan.FromMinutes(5)) return;
+            if (!looping) return;
+            if (!Monitor.TryEnter(restartLock)) return; // a restart is running
+            try { if (now - lastRestart < TimeSpan.FromMinutes(5)) return; }
+            finally { Monitor.Exit(restartLock); }
             // Repeated errors from a GlazeWM that still answers aren't a stuck one.
             if (WorkspaceTidy.Glaze("query focused").Length > 0) return;
-            lastRestart = now;
             recent.Clear();
-            if (Restart() && Notify != null)
+            if (Restart(true) && Notify != null)
                 Notify("GlazeWM got stuck in a loop of error boxes, so it was restarted. Your windows are still open.");
         }
         catch { }
@@ -1067,7 +1070,31 @@ static class WmRescue
 
     // Ends GlazeWM (and any of its command-line calls waiting on it) and starts it again.
     // GlazeWM's own start-up commands then find the bar, this daemon and the menu already running.
-    public static bool Restart()
+    // Only one restart runs at a time (Super menu, automatic, or `--restart-wm` without a daemon);
+    // asking again meanwhile does nothing. An automatic one also gives way to one that just ran.
+    public static bool Restart(bool automatic = false)
+    {
+        if (!Monitor.TryEnter(restartLock)) return false;
+        try
+        {
+            if (automatic && DateTime.Now - lastRestart < TimeSpan.FromMinutes(5)) return false;
+            using (var m = new Mutex(false, @"Local\winarchy-wm-restart")) // other winarchy-daemon processes
+            {
+                try { if (!m.WaitOne(0)) return false; }
+                catch (AbandonedMutexException) { }
+                try
+                {
+                    lastRestart = DateTime.Now;
+                    return RestartNow();
+                }
+                finally { m.ReleaseMutex(); }
+            }
+        }
+        catch { return false; }
+        finally { Monitor.Exit(restartLock); }
+    }
+
+    static bool RestartNow()
     {
         try
         {
