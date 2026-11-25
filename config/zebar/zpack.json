@@ -39,7 +39,7 @@
           },
           {
             "program": "rasdial.exe",
-            "argsRegex": ".*"
+            "argsRegex": "^{{VPN_RE}} /disconnect$"
           },
           {
             "program": "rasdial.exe",
@@ -47,7 +47,7 @@
           },
           {
             "program": "rasphone.exe",
-            "argsRegex": ".*"
+            "argsRegex": "^(-f {{VPN_PBK_RE}} )?-d {{VPN_RE}}$"
           },
           {
             "program": "powershell.exe",

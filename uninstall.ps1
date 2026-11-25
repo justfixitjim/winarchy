@@ -99,6 +99,36 @@ if (Test-Path $agentsState) {
 }
 if ([Environment]::GetEnvironmentVariable('CODEX_HOME', 'User') -like "$agentsState*") { [Environment]::SetEnvironmentVariable('CODEX_HOME', $null, 'User') }
 
+# Handy: put back the push-to-talk key and sign-in start it had before winarchy changed them
+# (install.ps1 saved its settings first). Anything you changed in Handy since is kept.
+$handySettings = Join-Path $env:APPDATA 'com.pais.handy\settings_store.json'
+$handyBackups = @(Get-ChildItem "$handySettings.bak-*" -ErrorAction SilentlyContinue | Sort-Object Name)   # oldest: before winarchy
+if ((Test-Path $handySettings) -and $handyBackups) {
+    Step 'Undoing the Handy changes winarchy made'
+    try {
+        $handyWasRunning = [bool](Get-Process handy -ErrorAction SilentlyContinue)
+        Get-Process handy -ErrorAction SilentlyContinue | Stop-Process -Force   # it rewrites its settings on exit
+        Start-Sleep -Seconds 1
+        $before = (Get-Content $handyBackups[0].FullName -Raw | ConvertFrom-Json).settings
+        $store = Get-Content $handySettings -Raw | ConvertFrom-Json
+        $s = $store.settings
+        function Set-Back($name) {
+            $old = $before.PSObject.Properties[$name]
+            if ($old) { $s | Add-Member -NotePropertyName $name -NotePropertyValue $old.Value -Force } else { $s.PSObject.Properties.Remove($name) }
+        }
+        if ($s.bindings.transcribe.current_binding -eq 'ctrl_right' -and $before.bindings.transcribe.current_binding -ne 'ctrl_right') {
+            $s.bindings.transcribe.current_binding = $before.bindings.transcribe.current_binding
+            Set-Back 'shortcut_activation'
+        }
+        if ($s.autostart_enabled -and -not $before.autostart_enabled) { Set-Back 'autostart_enabled'; Set-Back 'start_hidden' }
+        [IO.File]::WriteAllText($handySettings, ($store | ConvertTo-Json -Depth 20) + "`n", (New-Object Text.UTF8Encoding $false))
+        $handyBackups | Remove-Item
+        # Started again, Handy also drops its own sign-in entry if it no longer starts at sign-in.
+        if ($handyWasRunning) { Start-Process (Join-Path $env:LOCALAPPDATA 'Handy\handy.exe') }
+        Write-Host '    put back Handy''s push-to-talk key and sign-in setting'
+    } catch { Write-Warning "Handy's settings were left as they are: $($_.Exception.Message)" }
+}
+
 $themeScript = Join-Path $dest 'tools\theme.ps1'
 if (Test-Path $themeScript) {
     Step 'Restoring Windows colours, Terminal and VS Code settings from before winarchy themes'

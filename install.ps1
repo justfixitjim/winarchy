@@ -396,10 +396,13 @@ $paths = [ordered]@{
 }
 # zpack.json also pins the whole PowerShell command line the pages use (PS / -File in the pages), so
 # a page can run these scripts and nothing else. Escaped here for zpack's regex, below for JSON.
+function ConvertTo-Regex($text) { $text -replace '([\\.+*?()|\[\]{}^$])', '\$1' }
 foreach ($name in 'AGENTS', 'NETWORK', 'BLUETOOTH') {
-    $cmdLine = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ' + $paths["{{${name}_PS1}}"]
-    $paths["{{${name}_ARGS_RE}}"] = $cmdLine -replace '([\\.+*?()|\[\]{}^$])', '\$1'
+    $paths["{{${name}_ARGS_RE}}"] = ConvertTo-Regex ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ' + $paths["{{${name}_PS1}}"])
 }
+# Likewise the VPN button: rasdial and rasphone only for this PC's VPN connection.
+$paths['{{VPN_RE}}'] = ConvertTo-Regex $VpnName
+$paths['{{VPN_PBK_RE}}'] = ConvertTo-Regex $vpnPbk
 foreach ($page in Get-ChildItem $pack -Filter *.html) {
     $text = [IO.File]::ReadAllText($page.FullName)
     foreach ($k in $paths.Keys) { $text = $text.Replace($k, $paths[$k].Replace('\', '\\').Replace("'", "\'")) }
@@ -440,7 +443,9 @@ $themeId = 'tokyo-night'
 $themeJson = Join-Path $dest 'theme.json'
 if (Test-Path $themeJson) { try { $themeId = (Get-Content $themeJson -Raw | ConvertFrom-Json).id } catch {} }
 if (-not (Test-Path (Join-Path $themesDir "$themeId.json"))) { $themeId = 'tokyo-night' }
-Quiet { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $toolsDir 'theme.ps1') $themeId -Only 'glazewm,bar,menu' -NoReload -NoPopup }
+# -KeepConfig: your GlazeWM config is left alone, its border colours included.
+$themeTargets = if ($KeepConfig) { 'bar,menu' } else { 'glazewm,bar,menu' }
+Quiet { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $toolsDir 'theme.ps1') $themeId -Only $themeTargets -NoReload -NoPopup }
 Note "Theme: $themeId"
 if (-not $KeepTerminal) {
     # Foot-like Windows Terminal: theme colours, no tabs or title bar, Nerd Font, padding.

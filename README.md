@@ -267,7 +267,7 @@ Why not Right Alt like Omarchy? On Windows a held Right Alt also reaches the foc
 .\uninstall.ps1 -RemoveApps
 ```
 
-This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Terminal settings winarchy replaced, and removes the sign-in shortcut. Handy, the Nerd Font and herdr stay installed (herdr lives in `%USERPROFILE%\.herdr` and `%LOCALAPPDATA%\Programs\Herdr`).
+This restores the taskbar, the Zebar bar, the GlazeWM config and the Windows Terminal settings winarchy replaced, and removes the sign-in shortcut (or puts back one you had before). Handy gets its own push-to-talk key and sign-in setting back. Handy, the Nerd Font and herdr stay installed (herdr lives in `%USERPROFILE%\.herdr` and `%LOCALAPPDATA%\Programs\Herdr`).
 
 ## How it works
 
