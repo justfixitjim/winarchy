@@ -503,7 +503,15 @@ if (-not $NoDictation -and (Test-Path $handyExe)) {
 # --- 8. Start at sign-in, then start now ----------------------------------------------
 Step 'Starting GlazeWM (and at every sign-in)'
 $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
+# A GlazeWM.lnk of your own (not the one winarchy writes) is kept, once, for uninstall.ps1 to put back.
+$startupBackup = Join-Path $dest 'GlazeWM.lnk.before'
 $shell = New-Object -ComObject WScript.Shell
+$before = if (Test-Path $startup) { $shell.CreateShortcut($startup) } else { $null }
+if ($before -and -not (Test-Path $startupBackup) -and
+    ($before.TargetPath -ne $glazeExe -or $before.Arguments -or $before.WorkingDirectory -ne $env:USERPROFILE)) {
+    Copy-Item $startup $startupBackup
+    Note "backed up your startup shortcut -> $startupBackup"
+}
 $lnk = $shell.CreateShortcut($startup)
 $lnk.TargetPath = $glazeExe
 $lnk.WorkingDirectory = $env:USERPROFILE

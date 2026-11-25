@@ -48,7 +48,9 @@ Get-ChildItem 'HKCU:\Software\Classes\SystemFileAssociations' -ErrorAction Silen
 
 Step 'Removing sign-in shortcut'
 $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'GlazeWM.lnk'
-if (Test-Path $startup) { Remove-Item $startup -Force }
+$startupBackup = Join-Path $dest 'GlazeWM.lnk.before'
+if (Test-Path $startupBackup) { Copy-Item $startupBackup $startup -Force; Write-Host '    put back the startup shortcut you had before' }
+elseif (Test-Path $startup) { Remove-Item $startup -Force }
 
 Step 'Restoring GlazeWM config'
 if (Test-Path $config) {

@@ -54,6 +54,7 @@ function Log($msg) {
 function ConvertFrom-Jsonc([string]$text) {
     $sb = New-Object Text.StringBuilder
     $i = 0; $n = $text.Length; $inStr = $false
+    $comma = -1   # where the last comma went, until something other than space follows it
     while ($i -lt $n) {
         $c = $text[$i]
         if ($inStr) {
@@ -62,7 +63,7 @@ function ConvertFrom-Jsonc([string]$text) {
             if ($c -eq '"') { $inStr = $false }
             $i++; continue
         }
-        if ($c -eq '"') { $inStr = $true; [void]$sb.Append($c); $i++; continue }
+        if ($c -eq '"') { $inStr = $true; $comma = -1; [void]$sb.Append($c); $i++; continue }
         if ($c -eq '/' -and $i + 1 -lt $n -and $text[$i + 1] -eq '/') {
             while ($i -lt $n -and $text[$i] -ne "`n") { $i++ }
             continue
@@ -72,9 +73,14 @@ function ConvertFrom-Jsonc([string]$text) {
             $i = if ($end -lt 0) { $n } else { $end + 2 }
             continue
         }
+        if (-not [char]::IsWhiteSpace($c)) {
+            # A trailing comma (before } or ]) is dropped. Commas inside strings never get here.
+            if (($c -eq '}' -or $c -eq ']') -and $comma -ge 0) { [void]$sb.Remove($comma, 1) }
+            $comma = if ($c -eq ',') { $sb.Length } else { -1 }
+        }
         [void]$sb.Append($c); $i++
     }
-    $plain = [regex]::Replace($sb.ToString(), ',(\s*[\]}])', '$1')
+    $plain = $sb.ToString()
     if (-not $plain.Trim()) { $plain = '{}' }
     return $plain | ConvertFrom-Json
 }
@@ -143,6 +149,9 @@ $terminalSettings = @(
 ) | Where-Object { Test-Path $_ }
 
 function Save-Backup {
+    # Each Terminal's settings are saved before winarchy first changes them, also when that
+    # Terminal is installed after the first theme.
+    foreach ($ts in $terminalSettings) { if ((Test-Path $ts) -and -not (Test-Path "$ts.winarchy-backup")) { Copy-Item $ts "$ts.winarchy-backup" } }
     if (Test-Path $backupPath) { return }
     $reg = foreach ($rv in $regValues) {
         $item = Get-ItemProperty -Path $rv[0] -Name $rv[1] -ErrorAction SilentlyContinue
@@ -156,7 +165,6 @@ function Save-Backup {
     if (Test-Path $vscodeSettings) {
         try { $p = (ConvertFrom-Jsonc (Read-Text $vscodeSettings)).PSObject.Properties['workbench.colorTheme']; if ($p) { $vs = $p.Value } } catch {}
     }
-    foreach ($ts in $terminalSettings) { if (-not (Test-Path "$ts.winarchy-backup")) { Copy-Item $ts "$ts.winarchy-backup" } }
     Write-Text $backupPath ((@{ Registry = @($reg); VSCodeTheme = $vs } | ConvertTo-Json -Depth 5) + "`n")
 }
 

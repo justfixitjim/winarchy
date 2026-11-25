@@ -598,7 +598,7 @@ static class WorkspaceTidy
         }
     }
 
-    class Mon { public double X, Y; public List<string> Workspaces = new List<string>(); }
+    class Mon { public double X, Y; public List<string> Workspaces = new List<string>(); public List<string> Ids = new List<string>(); }
 
     static Dictionary<string, int> Bindings()
     {
@@ -632,9 +632,8 @@ static class WorkspaceTidy
     }
 
     // Monitors in GlazeWM's order (the numbers bind_to_monitor uses), with their workspaces.
-    static List<Mon> Monitors(out string focused)
+    static List<Mon> Monitors()
     {
-        focused = null;
         var list = new List<Mon>();
         var top = Json.DeserializeObject(Glaze("query monitors")) as Dictionary<string, object>;
         var data = top["data"] as Dictionary<string, object>;
@@ -651,7 +650,7 @@ static class WorkspaceTidy
                 var w = (Dictionary<string, object>)c;
                 string name = Convert.ToString(w["name"]);
                 mon.Workspaces.Add(name);
-                if (w.ContainsKey("hasFocus") && w["hasFocus"] is bool && (bool)w["hasFocus"]) focused = name;
+                mon.Ids.Add(Convert.ToString(w["id"]));
             }
             list.Add(mon);
         }
@@ -665,31 +664,26 @@ static class WorkspaceTidy
         {
             var bind = Bindings();
             if (bind.Count == 0 || !File.Exists(Cli)) return;
-            string focus = null;
-            bool moved = false;
             // One move per pass, then look again: a move can take a step through a middle monitor.
+            // Each move names the workspace by its id, so it doesn't take focus first (a focus
+            // change by you in between would otherwise move the wrong workspace).
             for (int pass = 0; pass < 8; pass++)
             {
-                string focusedNow;
-                var mons = Monitors(out focusedNow);
-                if (focus == null) focus = focusedNow;
-                string name = null, dir = null;
-                for (int i = 0; i < mons.Count && name == null; i++)
-                    foreach (string ws in mons[i].Workspaces)
+                var mons = Monitors();
+                string id = null, dir = null;
+                for (int i = 0; i < mons.Count && id == null; i++)
+                    for (int k = 0; k < mons[i].Workspaces.Count; k++)
                     {
                         int want;
-                        if (!bind.TryGetValue(ws, out want) || want == i || want >= mons.Count) continue;
+                        if (!bind.TryGetValue(mons[i].Workspaces[k], out want) || want == i || want >= mons.Count) continue;
                         double dx = mons[want].X - mons[i].X, dy = mons[want].Y - mons[i].Y;
                         dir = Math.Abs(dx) >= Math.Abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
-                        name = ws;
+                        id = mons[i].Ids[k];
                         break;
                     }
-                if (name == null) break;
-                Glaze("command focus --workspace " + name);
-                Glaze("command move-workspace --direction " + dir);
-                moved = true;
+                if (id == null) break;
+                Glaze("command --id " + id + " move-workspace --direction " + dir);
             }
-            if (moved && focus != null) Glaze("command focus --workspace " + focus);
         }
         catch { }
         finally { Interlocked.Exchange(ref busy, 0); }
@@ -722,6 +716,7 @@ static class TileGuard
     static readonly Dictionary<long, string> lastFix = new Dictionary<long, string>();
     static System.Threading.Timer timer;
     static int busy;
+    static DateTime waitingSince = DateTime.MaxValue; // first move since the last check
 
     public static void Start()
     {
@@ -734,8 +729,17 @@ static class TileGuard
         // Fires for every move of anything (carets, scroll bars...): keep this cheap.
         if (idObject != 0 || idChild != 0 || hwnd == IntPtr.Zero) return;
         if (GetAncestor(hwnd, GA_ROOT) != hwnd || !IsWindowVisible(hwnd)) return;
-        lock (gate) moved.Add(hwnd);
-        timer.Change(500, Timeout.Infinite); // after things settle
+        // After things settle, but never more than 2 s after the first move: a window that keeps
+        // moving (an animation, a progress window) mustn't put off the check for everyone else.
+        int due;
+        lock (gate)
+        {
+            moved.Add(hwnd);
+            var now = DateTime.UtcNow;
+            if (waitingSince == DateTime.MaxValue) waitingSince = now;
+            due = (int)Math.Max(0, Math.Min(500, 2000 - (now - waitingSince).TotalMilliseconds));
+        }
+        timer.Change(due, Timeout.Infinite);
     }
 
     static void Check(object state)
@@ -746,7 +750,7 @@ static class TileGuard
             // A mouse button down means a drag or resize in progress; GlazeWM handles those itself.
             if (GetAsyncKeyState(0x01) < 0 || GetAsyncKeyState(0x02) < 0) { timer.Change(500, Timeout.Infinite); return; }
             var handles = new HashSet<long>();
-            lock (gate) { foreach (var h in moved) handles.Add(h.ToInt64()); moved.Clear(); }
+            lock (gate) { foreach (var h in moved) handles.Add(h.ToInt64()); moved.Clear(); waitingSince = DateTime.MaxValue; }
             if (handles.Count == 0) return;
 
             var top = Json.DeserializeObject(WorkspaceTidy.Glaze("query windows")) as Dictionary<string, object>;

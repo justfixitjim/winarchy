@@ -567,6 +567,16 @@ static class Program
 
         if (first == "--resident") { RunResident(); return; }
         string request = args.Length > 0 ? args[0] : "";
+        // A stand-alone menu (opened before the resident copy was ready) is open: this press closes it,
+        // rather than the resident copy opening a second menu beside it.
+        Mutex standalone;
+        if (request != "prepared" && Mutex.TryOpenExisting(@"Local\winarchy-menu", out standalone))
+        {
+            standalone.Dispose();
+            EventWaitHandle close;
+            if (EventWaitHandle.TryOpenExisting(@"Local\winarchy-menu-close", out close)) using (close) close.Set();
+            return;
+        }
         if (request != "prepared" && SendToResident(request)) { Trace("handed to resident"); return; }
         if (request != "prepared") StartResident();
 

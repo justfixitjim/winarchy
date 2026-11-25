@@ -11,6 +11,12 @@
 $stateDir = Join-Path $env:LOCALAPPDATA 'winarchy'
 $state = Join-Path $stateDir 'recording.json'
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+# Starting takes a second or two before the state file exists; a second press meanwhile waits
+# here and then stops the new recording, instead of starting another one.
+$lock = New-Object Threading.Mutex($false, 'Local\winarchy-record')
+function Enter-Lock { try { [void]$lock.WaitOne(20000) } catch [Threading.AbandonedMutexException] { } }
+function Exit-Lock { try { $lock.ReleaseMutex() } catch { } }
+Enter-Lock
 
 function Stop-Recording($rec) {
     $proc = Get-Process -Id $rec.pid -ErrorAction SilentlyContinue
@@ -50,7 +56,7 @@ function Stop-Recording($rec) {
 
 # Already recording? Then this run stops it.
 if (Test-Path $state) {
-    Stop-Recording (Get-Content $state -Raw | ConvertFrom-Json)
+    try { Stop-Recording (Get-Content $state -Raw | ConvertFrom-Json) } finally { Exit-Lock }
     exit
 }
 
@@ -86,11 +92,13 @@ if ($proc) {
     if ($child) { $proc = Get-Process -Id $child.ProcessId }
 }
 if (-not $proc) {
+    Exit-Lock
     Show-Note 'Recording failed' 'ffmpeg could not start a recording on this PC.'
     exit 1
 }
 
 @{ pid = $proc.Id; file = $file; temp = $temp } | ConvertTo-Json | Set-Content $state -Encoding UTF8
+Exit-Lock
 
 # Stay running with a red tray icon until the recording stops. The bar shows this icon as a
 # REC timer. Clicking it stops the recording here; pressing the hotkey again runs a second
@@ -112,8 +120,9 @@ $tray.Add_MouseClick({
     if ($e.Button -ne [System.Windows.Forms.MouseButtons]::Left -or $script:stopping) { return }
     $script:stopping = $true
     $tray.Visible = $false
+    Enter-Lock
     try { if (Test-Path $state) { Stop-Recording (Get-Content $state -Raw | ConvertFrom-Json) } }
-    finally { [System.Windows.Forms.Application]::ExitThread() }
+    finally { Exit-Lock; [System.Windows.Forms.Application]::ExitThread() }
 })
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 500
